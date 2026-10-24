@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Work+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&family=Poppins:wght@400;500;600;700&family=Special+Elite&family=Inter:wght@400;500;600;700&family=Merriweather:wght@400;700&family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+:root {
+  /* fonts — overridden at runtime from a signed-in user's saved
+     preference (see lib/theme.ts); these are just the defaults */
+  --font-display: "Caveat", cursive;
+  --font-body: "Work Sans", sans-serif;
+
+  /* theme colors, stored as "R G B" triples (not hex) so Tailwind's
+     opacity modifiers, e.g. bg-gold/40, keep working after these are
+     changed at runtime. Also overridden from a user's saved preference. */
+  --color-board-rgb: 31 42 36; /* #1F2A24 */
+  --color-panel-rgb: 38 51 44; /* #26332C */
+  --color-rail-rgb: 46 59 51; /* #2E3B33 */
+  --color-gold-rgb: 232 176 75; /* #E8B04B */
+  --color-tomato-rgb: 193 80 46; /* #C1502E */
+  --color-chalk-rgb: 243 239 227; /* #F3EFE3 */
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: rgb(var(--color-board-rgb));
+  color: rgb(var(--color-chalk-rgb));
+}
+
+/* faint chalk dust / scratch texture over the board */
+.chalk-texture {
+  position: relative;
+}
+.chalk-texture::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: repeating-linear-gradient(
+      115deg,
+      #ffffff 0px,
+      transparent 1px,
+      transparent 3px
+    ),
+    repeating-linear-gradient(
+      25deg,
+      #ffffff 0px,
+      transparent 1px,
+      transparent 4px
+    );
+  mix-blend-mode: overlay;
+}
+
+/* dashed chalk outline used for valid drop targets — follows the user's
+   chosen accent color rather than a fixed gold */
+.chalk-drop-target {
+  outline: 2px dashed rgb(var(--color-gold-rgb) / 0.85);
+  outline-offset: -2px;
+  background-color: rgb(var(--color-gold-rgb) / 0.08);
+}
+
+/* little washi-tape strip pinned to the top of each recipe card */
+.washi {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-2deg);
+  width: 46px;
+  height: 16px;
+  border-radius: 2px;
+  opacity: 0.9;
+}
+
+@media print {
+  @page {
+    margin: 1.2cm;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--color-rail-rgb));
+  border-radius: 8px;
+  border: 2px solid rgb(var(--color-board-rgb));
+}

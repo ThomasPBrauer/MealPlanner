@@ -1,0 +1,143 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String?
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model UserPreference {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  orientation    String   @default("daysTop") // "daysTop" | "daysSide"
+  firstDayOfWeek String   @default("mon") // "mon" | "tue" | ... | "sun"
+  displayFont    String   @default("caveat")
+  bodyFont       String   @default("workSans")
+  colorBoard     String   @default("#1F2A24")
+  colorPanel     String   @default("#26332C")
+  colorGold      String   @default("#E8B04B")
+  colorTomato    String   @default("#C1502E")
+  colorChalk     String   @default("#F3EFE3")
+  visibleNutrients String @default("calories") // comma-separated NutritionKey list, e.g. "calories,protein,fat"
+  hideCheckedItems Boolean @default(false) // shopping list: hide checked items instead of showing them struck through
+  hideCompletedDepartments Boolean @default(false) // shopping list: hide a whole department once every item in it is checked
+  departmentOrder  String? @db.Text // JSON array of department names in the user's preferred shopping order (includes any custom ones they've added); null = use the built-in default order
+  updatedAt      DateTime @updatedAt
+}
+
+// A user's lasting correction to where an ingredient belongs / where it
+// sits within its department on the shopping list — keyed by ingredient
+// name (not per-recipe), so fixing "Cilantro" once applies to every future
+// shopping list, regardless of which recipe it came from or what unit it's in.
+model IngredientPreference {
+  id            String   @id @default(cuid())
+  email         String
+  ingredientKey String   // normalized (trimmed, lowercased) ingredient name
+  department    String?  // overrides whatever department the recipe stated; null = no override
+  sortOrder     Int?     // manual position within its department; null = falls back to alphabetical
+  updatedAt     DateTime @updatedAt
+
+  @@unique([email, ingredientKey])
+  @@index([email])
+}
+
+// A shopping-list item the user typed in directly ("running low on X") —
+// not derived from any recipe. Scoped to one week's list, same as
+// ShoppingCheck; carries its own checked/department/order rather than
+// going through IngredientPreference, since there's no recipe-spanning
+// identity to correct for future weeks.
+model ShoppingManualItem {
+  id         String   @id @default(cuid())
+  email      String
+  weekStart  String   // "YYYY-MM-DD"
+  name       String
+  amount     String   @default("")
+  unit       String   @default("")
+  department String?  // null = "Other"
+  checked    Boolean  @default(false)
+  sortOrder  Int?     // manual position within its department; null = falls back to alphabetical
+  createdAt  DateTime @default(now())
+
+  @@index([email, weekStart])
+}
+
+// Which shopping-list items are checked off, scoped to a specific week's
+// list (unlike IngredientPreference, this is meant to reset every week).
+// A row's mere existence means "checked" — unchecking deletes the row,
+// same pattern as SlotNote's empty-note-deletes-the-row.
+model ShoppingCheck {
+  id        String   @id @default(cuid())
+  email     String
+  weekStart String   // "YYYY-MM-DD"
+  itemKey   String   // matches the aggregated ingredient's key (name|unit)
+  createdAt DateTime @default(now())
+
+  @@unique([email, weekStart, itemKey])
+  @@index([email, weekStart])
+}
+
+model PlannedMeal {
+  id        String   @id @default(cuid())
+  email     String
+  date      String // "YYYY-MM-DD", the actual calendar day this meal is planned for
+  mealType  String // "breakfast" | "lunch" | "dinner"
+  mealId    String // references Meal.id
+  createdAt DateTime @default(now())
+
+  @@index([email, date])
+}
+
+model Meal {
+  id             String   @id @default(cuid())
+  ownerEmail     String
+  visibility     String   @default("personal") // "public" | "personal"
+  name           String
+  tags           String?  @db.Text // JSON: string[] of free-form tags (null on rows created before this column existed)
+  photo          String?  @db.LongText // base64 data URL of the recipe photo, resized/compressed client-side before upload
+  primaryProtein String   @default("None") // e.g. "Beef", "Chicken", "Pork", "Fish", "Tofu", "None"
+  primaryCarb    String   @default("None") // e.g. "Pasta", "Rice", "Tortillas", "Bread", "Potato", "None"
+  minutes        Int      @default(0)
+  servings       Int      @default(4)
+  source         String   @default("") // where the recipe came from — cookbook, URL, person, etc.
+
+  // nutrition — all optional, per-serving, styled after a packaged-food label
+  calories     Int?
+  protein      Float?
+  carbs        Float?
+  fiber        Float?
+  netCarbs     Float?
+  fat          Float?
+  sugar        Float?
+  sodium       Float?
+
+  notes        String   @db.Text // personal comments on the recipe
+  ingredients  String   @db.Text // JSON: [{ id, name, amount, unit }]
+  instructions String   @db.Text // JSON: string[] (ordered steps)
+  components   String   @db.Text // JSON: string[] of Meal.id — other recipes this one is built from, in order
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([ownerEmail])
+}
+
+model SlotNote {
+  id       String   @id @default(cuid())
+  email    String
+  date     String // "YYYY-MM-DD"
+  mealType String // "breakfast" | "lunch" | "dinner"
+  note     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@unique([email, date, mealType])
+  @@index([email, date])
+}
