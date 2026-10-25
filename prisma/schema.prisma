@@ -27,6 +27,7 @@ model UserPreference {
   colorGold      String   @default("#E8B04B")
   colorTomato    String   @default("#C1502E")
   colorChalk     String   @default("#F3EFE3")
+  themeName      String?  // name of the theme these fonts/colors started from; null = none picked
   visibleNutrients String @default("calories") // comma-separated NutritionKey list, e.g. "calories,protein,fat"
   hideCheckedItems Boolean @default(false) // shopping list: hide checked items instead of showing them struck through
   hideCompletedDepartments Boolean @default(false) // shopping list: hide a whole department once every item in it is checked
@@ -140,4 +141,27 @@ model SlotNote {
 
   @@unique([email, date, mealType])
   @@index([email, date])
+}
+
+// A theme someone saved from Settings for everyone to use. Built-in themes
+// live in code (lib/themes.ts), not here. `nameKey` is the name folded to
+// lowercase/no accents/single spaces and is unique across all users, so no
+// two themes can share a name; only the owner can overwrite or delete one.
+model Theme {
+  id          String   @id @default(cuid())
+  ownerEmail  String
+  ownerName   String?
+  name        String
+  nameKey     String   @unique
+  displayFont String
+  bodyFont    String
+  colorBoard  String
+  colorPanel  String
+  colorGold   String
+  colorTomato String
+  colorChalk  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([ownerEmail])
 }

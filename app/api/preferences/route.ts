@@ -12,6 +12,7 @@ import {
   NutritionKey,
   Orientation,
 } from "@/lib/types";
+import { THEME_NAME_MAX, cleanThemeName } from "@/lib/themes";
 
 const VALID_DAYS = DAYS.map((d) => d.key);
 const VALID_DISPLAY_FONTS = FONT_OPTIONS.map((f) => f.key);
@@ -65,6 +66,14 @@ function sanitizeDepartmentOrder(value: unknown): string[] {
   return out;
 }
 
+// Which theme the user started from. It's only a label (the real fonts and
+// colors are stored separately), so anything unusable just becomes "none".
+function sanitizeThemeName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const name = cleanThemeName(value);
+  return name && name.length <= THEME_NAME_MAX ? name : null;
+}
+
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -88,6 +97,7 @@ export async function GET() {
       tomato: prefs?.colorTomato ?? DEFAULT_PREFERENCES.colors.tomato,
       chalk: prefs?.colorChalk ?? DEFAULT_PREFERENCES.colors.chalk,
     },
+    themeName: prefs?.themeName ?? null,
     visibleNutrients: parseVisibleNutrients(prefs?.visibleNutrients),
     hideCheckedItems: prefs?.hideCheckedItems ?? DEFAULT_PREFERENCES.hideCheckedItems,
     hideCompletedDepartments: prefs?.hideCompletedDepartments ?? DEFAULT_PREFERENCES.hideCompletedDepartments,
@@ -140,6 +150,7 @@ export async function PUT(req: Request) {
     colorGold,
     colorTomato,
     colorChalk,
+    themeName: sanitizeThemeName(body.themeName),
     visibleNutrients,
     hideCheckedItems,
     hideCompletedDepartments,
@@ -164,6 +175,7 @@ export async function PUT(req: Request) {
       tomato: prefs.colorTomato,
       chalk: prefs.colorChalk,
     },
+    themeName: prefs.themeName,
     visibleNutrients: parseVisibleNutrients(prefs.visibleNutrients),
     hideCheckedItems: prefs.hideCheckedItems,
     hideCompletedDepartments: prefs.hideCompletedDepartments,

@@ -16,6 +16,9 @@ import {
   ThemeColors,
 } from "@/lib/types";
 import { applyTheme } from "@/lib/theme";
+import { groupFonts } from "@/lib/fonts";
+import { DEFAULT_THEME_NAME, ThemeSummary } from "@/lib/themes";
+import ThemeSettings from "@/components/ThemeSettings";
 
 const COLOR_FIELDS: { key: keyof ThemeColors; label: string; hint: string }[] = [
   { key: "board", label: "Background", hint: "Main page background" },
@@ -44,6 +47,7 @@ export default function SettingsPage() {
           displayFont: data.displayFont ?? DEFAULT_PREFERENCES.displayFont,
           bodyFont: data.bodyFont ?? DEFAULT_PREFERENCES.bodyFont,
           colors: { ...DEFAULT_PREFERENCES.colors, ...(data.colors ?? {}) },
+          themeName: data.themeName ?? null,
           visibleNutrients: data.visibleNutrients ?? DEFAULT_PREFERENCES.visibleNutrients,
           hideCheckedItems: data.hideCheckedItems ?? DEFAULT_PREFERENCES.hideCheckedItems,
           hideCompletedDepartments: data.hideCompletedDepartments ?? DEFAULT_PREFERENCES.hideCompletedDepartments,
@@ -80,8 +84,18 @@ export default function SettingsPage() {
     });
   }
 
+  function handlePickTheme(theme: ThemeSummary) {
+    update({
+      themeName: theme.name,
+      displayFont: theme.displayFont,
+      bodyFont: theme.bodyFont,
+      colors: theme.colors,
+    });
+  }
+
   function resetTheme() {
     update({
+      themeName: DEFAULT_THEME_NAME,
       displayFont: DEFAULT_PREFERENCES.displayFont,
       bodyFont: DEFAULT_PREFERENCES.bodyFont,
       colors: DEFAULT_PREFERENCES.colors,
@@ -199,6 +213,12 @@ export default function SettingsPage() {
                 </div>
               </fieldset>
 
+              <ThemeSettings
+                current={{ displayFont: prefs.displayFont, bodyFont: prefs.bodyFont, colors: prefs.colors }}
+                themeName={prefs.themeName}
+                onPick={handlePickTheme}
+                onNameSaved={(name) => update({ themeName: name })}
+              >
               <fieldset>
                 <legend className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-sage">
                   Fonts
@@ -222,10 +242,14 @@ export default function SettingsPage() {
                         )?.family,
                       }}
                     >
-                      {FONT_OPTIONS.map((f) => (
-                        <option key={f.key} value={f.key} style={{ fontFamily: f.family }}>
-                          {f.label}
-                        </option>
+                      {groupFonts(FONT_OPTIONS).map((g) => (
+                        <optgroup key={g.group} label={g.group}>
+                          {g.options.map((f) => (
+                            <option key={f.key} value={f.key} style={{ fontFamily: f.family }}>
+                              {f.label}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </div>
@@ -247,10 +271,14 @@ export default function SettingsPage() {
                         )?.family,
                       }}
                     >
-                      {BODY_FONT_OPTIONS.map((f) => (
-                        <option key={f.key} value={f.key} style={{ fontFamily: f.family }}>
-                          {f.label}
-                        </option>
+                      {groupFonts(BODY_FONT_OPTIONS).map((g) => (
+                        <optgroup key={g.group} label={g.group}>
+                          {g.options.map((f) => (
+                            <option key={f.key} value={f.key} style={{ fontFamily: f.family }}>
+                              {f.label}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </div>
@@ -291,9 +319,11 @@ export default function SettingsPage() {
                   onClick={resetTheme}
                   className="mt-2 text-[11px] text-sage/80 underline-offset-2 hover:text-chalk hover:underline"
                 >
-                  Reset fonts & colors to default
+                  Reset to the default theme
                 </button>
               </fieldset>
+
+              </ThemeSettings>
 
               <div className="flex items-center gap-3">
                 <button

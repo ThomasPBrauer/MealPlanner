@@ -151,19 +151,9 @@ export const DEFAULT_THEME_COLORS: ThemeColors = {
   chalk: "#F3EFE3",
 };
 
-export const FONT_OPTIONS = [
-  { key: "caveat", label: "Caveat — handwritten", family: "'Caveat', cursive" },
-  { key: "playfair", label: "Playfair Display — elegant serif", family: "'Playfair Display', serif" },
-  { key: "poppins", label: "Poppins — rounded sans", family: "'Poppins', sans-serif" },
-  { key: "specialElite", label: "Special Elite — typewriter", family: "'Special Elite', monospace" },
-] as const;
-
-export const BODY_FONT_OPTIONS = [
-  { key: "workSans", label: "Work Sans", family: "'Work Sans', sans-serif" },
-  { key: "inter", label: "Inter", family: "'Inter', sans-serif" },
-  { key: "merriweather", label: "Merriweather — serif", family: "'Merriweather', serif" },
-  { key: "jetbrainsMono", label: "JetBrains Mono", family: "'JetBrains Mono', monospace" },
-] as const;
+// the font catalogue lives in lib/fonts.ts; re-exported so existing imports keep working
+import { BODY_FONT_OPTIONS, FONT_OPTIONS } from "./fonts";
+export { BODY_FONT_OPTIONS, FONT_OPTIONS };
 
 export type DisplayFontKey = (typeof FONT_OPTIONS)[number]["key"];
 export type BodyFontKey = (typeof BODY_FONT_OPTIONS)[number]["key"];
@@ -174,6 +164,7 @@ export interface Preferences {
   displayFont: DisplayFontKey;
   bodyFont: BodyFontKey;
   colors: ThemeColors;
+  themeName?: string | null; // the theme these fonts/colors started from (may since have been tweaked)
   visibleNutrients: NutritionKey[]; // which nutrition fields to surface on Meal Cards & day totals
   hideCheckedItems: boolean; // shopping list: hide checked items instead of showing them struck through
   hideCompletedDepartments: boolean; // shopping list: hide a whole department once every item in it is checked
@@ -186,6 +177,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   displayFont: "caveat",
   bodyFont: "workSans",
   colors: DEFAULT_THEME_COLORS,
+  themeName: null,
   visibleNutrients: ["calories"],
   hideCheckedItems: false,
   hideCompletedDepartments: false,
