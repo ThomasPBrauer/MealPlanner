@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { serializeMeal, toPrismaData } from "@/lib/meals";
+import { createMealWithSlug, serializeMeal, toPrismaData } from "@/lib/meals";
 import {
   buildOffMealInput,
   mapRawOffProduct,
@@ -60,9 +60,7 @@ export async function POST(req: Request) {
   }
 
   const input = buildOffMealInput(product);
-  const created = await prisma.meal.create({
-    data: { ownerEmail: OFF_OWNER_EMAIL, ...toPrismaData(input, []) },
-  });
+  const created = await createMealWithSlug({ ownerEmail: OFF_OWNER_EMAIL, ...toPrismaData(input, []) });
 
   return NextResponse.json(serializeMeal(created, session.user.email), { status: 201 });
 }

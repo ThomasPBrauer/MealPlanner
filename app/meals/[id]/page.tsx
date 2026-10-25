@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getMealHistory, getVisibleMeal, listVisibleMeals } from "@/lib/meals";
@@ -9,6 +9,9 @@ import { colorForTags } from "@/lib/data";
 import { parseISODateLocal } from "@/lib/date";
 import { resolveIngredients, resolveInstructionGroups } from "@/lib/recipe";
 import DeleteMealButton from "@/components/DeleteMealButton";
+import { mealPath } from "@/lib/slug";
+import { getSiteUrl } from "@/lib/site";
+import { buildRecipeJsonLd, jsonLdScript } from "@/lib/recipeJsonLd";
 
 // reads the session (cookies) and the database on every request
 export const dynamic = "force-dynamic";
@@ -43,6 +46,15 @@ function formatDate(iso: string) {
   });
 }
 
+// An absolute URL a crawler or link preview can fetch the photo from.
+// Uploaded photos are stored as base64 data URLs, which are no use as an
+// image address, so those are served by the /photo route next to this page.
+function photoUrl(meal: Meal): string | undefined {
+  if (!meal.photo) return undefined;
+  if (/^https?:\/\//i.test(meal.photo)) return meal.photo;
+  return `${getSiteUrl()}${mealPath(meal)}/photo`;
+}
+
 function describeMeal(meal: Meal): string {
   const note = meal.notes.trim().split("\n")[0];
   if (note) return note.length > 200 ? `${note.slice(0, 197)}…` : note;
@@ -59,15 +71,14 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 
   const title = `${meal.name} — The Weekly Board`;
   const description = describeMeal(meal);
-  // uploaded photos are stored as base64 data URLs, which are no use as a
-  // link-preview image — only offer one when it's a real URL
-  const image = meal.photo && /^https?:\/\//i.test(meal.photo) ? meal.photo : undefined;
+  const image = photoUrl(meal);
 
   return {
     title,
     description,
     // only public recipes are meant to be found; an owner's personal recipe
     // should never be indexed even if its URL leaks
+    alternates: { canonical: `${getSiteUrl()}${mealPath(meal)}` },
     robots: meal.visibility === "public" ? undefined : { index: false, follow: false },
     openGraph: { title, description, images: image ? [image] : undefined },
   };
@@ -84,6 +95,18 @@ export default async function MealDetailPage({ params, searchParams }: PageProps
   ]);
   if (!meal) notFound();
 
+  // one address per recipe: a link made with the old id (or any other
+  // spelling) is sent permanently to the slug URL, keeping its query string
+  if (meal.slug && params.id !== meal.slug) {
+    const query = new URLSearchParams();
+    for (const [k, v] of Object.entries(searchParams)) {
+      if (typeof v === "string") query.set(k, v);
+      else if (Array.isArray(v)) v.forEach((x) => query.append(k, x));
+    }
+    const qs = query.toString();
+    permanentRedirect(`${mealPath(meal)}${qs ? `?${qs}` : ""}`);
+  }
+
   // planning history is per-user, so there's nothing to show signed out
   const history = signedIn ? await getMealHistory(meal.id, meal.isMine, email) : null;
 
@@ -97,14 +120,28 @@ export default async function MealDetailPage({ params, searchParams }: PageProps
   const backLabel = fromBoard ? "← Back to the board" : "← Back to meals";
   const editHref =
     fromBoard && weekParam
-      ? `/meals/${meal.id}/edit?from=board&week=${weekParam}`
-      : `/meals/${meal.id}/edit`;
+      ? `${mealPath(meal)}/edit?from=board&week=${weekParam}`
+      : `${mealPath(meal)}/edit`;
 
   const resolvedIngredients = resolveIngredients(meal, allMeals);
   const instructionGroups = resolveInstructionGroups(meal, allMeals);
 
+  const recipeJsonLd = buildRecipeJsonLd({
+    meal,
+    ingredients: resolvedIngredients,
+    instructionGroups,
+    url: `${getSiteUrl()}${mealPath(meal)}`,
+    imageUrl: photoUrl(meal),
+    description: describeMeal(meal),
+  });
+
   return (
     <main className="min-h-screen bg-board p-4 md:p-6">
+      {/* schema.org Recipe data, for search engines and recipe apps */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(recipeJsonLd) }}
+      />
       <div className="mx-auto max-w-2xl">
         <div className="mb-4 flex items-center justify-between">
           <Link href={backHref} className="text-[12px] text-sage/80 transition-colors hover:text-chalk">
@@ -112,7 +149,7 @@ export default async function MealDetailPage({ params, searchParams }: PageProps
           </Link>
           {!signedIn && (
             <Link
-              href={`/login?callbackUrl=${encodeURIComponent(`/meals/${meal.id}`)}`}
+              href={`/login?callbackUrl=${encodeURIComponent(mealPath(meal))}`}
               className="text-[11px] text-sage/90 transition-colors hover:text-gold"
             >
               Sign in to plan this meal
@@ -172,7 +209,7 @@ export default async function MealDetailPage({ params, searchParams }: PageProps
                   <span key={id}>
                     {i > 0 && ", "}
                     {sub ? (
-                      <Link href={`/meals/${sub.id}`} className="text-gold hover:underline">
+                      <Link href={mealPath(sub)} className="text-gold hover:underline">
                         {sub.name}
                       </Link>
                     ) : (

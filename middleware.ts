@@ -14,10 +14,14 @@ function isPublicRecipeRead(pathname: string, method: string): boolean {
   // browse list + its API
   if (pathname === "/meals" || pathname === "/api/meals") return true;
 
-  // /meals/<id> — but not /meals/new (and /meals/<id>/edit has an extra
-  // segment, so it never matches)
+  // /meals/<slug> — but not /meals/new (and /meals/<slug>/edit has an
+  // extra segment, so it never matches)
   const page = pathname.match(/^\/meals\/([^/]+)$/);
   if (page) return page[1] !== "new";
+
+  // /meals/<slug>/photo — the recipe photo, for link previews and crawlers
+  // (the handler still only serves public recipes to anonymous requests)
+  if (/^\/meals\/[^/]+\/photo$/.test(pathname)) return true;
 
   // /api/meals/<id> and /api/meals/<id>/history — but not the POST-only
   // import endpoints that happen to live under the same prefix

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
-    "db:push": "prisma db push"
+    "db:push": "prisma db push",
+    "db:backfill-slugs": "node scripts/backfill-slugs.mjs"
   },
   "dependencies": {
     "next": "14.2.5",

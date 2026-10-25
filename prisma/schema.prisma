@@ -99,6 +99,7 @@ model PlannedMeal {
 
 model Meal {
   id             String   @id @default(cuid())
+  slug           String?  @unique // readable URL name derived from `name` (e.g. "cancun-shrimp-tacos"), unique across all recipes; null only until scripts/backfill-slugs.mjs has run
   ownerEmail     String
   visibility     String   @default("personal") // "public" | "personal"
   name           String

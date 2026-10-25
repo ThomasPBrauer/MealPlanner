@@ -84,6 +84,7 @@ export interface Ingredient {
 
 export interface Meal {
   id: string;
+  slug?: string | null; // readable URL name, e.g. "cancun-shrimp-tacos"; null until backfilled
   name: string;
   tags: string[]; // free-form category labels, e.g. ["Vegetarian", "Quick", "Family"]
   primaryProtein: string;

@@ -40,7 +40,8 @@ function EditMealContent() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/meals/${params.id}`, {
+      // the URL may carry the slug; the API's write routes take the id
+      const res = await fetch(`/api/meals/${meal?.id ?? params.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),

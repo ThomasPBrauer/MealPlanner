@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Meal, NUTRITION_FIELDS, NutritionKey } from "@/lib/types";
 import { colorForTags } from "@/lib/data";
 import { isVirtualOffMeal } from "@/lib/openfoodfacts";
+import { mealPath } from "@/lib/slug";
 
 interface MealCardProps {
   meal: Meal;
@@ -38,8 +39,8 @@ export default function MealCard({
   const viewHref = isVirtual
     ? meal.source
     : weekIso
-    ? `/meals/${meal.id}?from=board&week=${weekIso}`
-    : `/meals/${meal.id}`;
+    ? `${mealPath(meal)}?from=board&week=${weekIso}`
+    : mealPath(meal);
 
   // only show fields the user opted into AND that this meal actually has a value for
   const nutritionToShow = NUTRITION_FIELDS.filter(

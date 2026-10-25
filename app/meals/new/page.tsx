@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import MealForm, { MealFormValues } from "@/components/MealForm";
+import { mealPath } from "@/lib/slug";
 
 export default function NewMealPage() {
   const router = useRouter();
@@ -25,7 +26,7 @@ export default function NewMealPage() {
         setSubmitting(false);
         return;
       }
-      router.push(`/meals/${data.id}`);
+      router.push(mealPath(data));
     } catch {
       setError("Something went wrong. Please try again.");
       setSubmitting(false);

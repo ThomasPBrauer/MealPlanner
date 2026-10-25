@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import {
+  createMealWithSlug,
   listVisibleMeals,
   parseMealInput,
   sanitizeComponentIds,
@@ -32,8 +32,9 @@ export async function POST(req: Request) {
 
   const components = await sanitizeComponentIds(session.user.email, parsed.components);
 
-  const created = await prisma.meal.create({
-    data: { ownerEmail: session.user.email, ...toPrismaData(parsed, components) },
+  const created = await createMealWithSlug({
+    ownerEmail: session.user.email,
+    ...toPrismaData(parsed, components),
   });
 
   return NextResponse.json(serializeMeal(created, session.user.email), { status: 201 });

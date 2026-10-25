@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   containsCycle,
+  ensureMealSlug,
   getVisibleMeal,
   parseMealInput,
   sanitizeComponentIds,
@@ -56,10 +57,13 @@ export async function PATCH(
     );
   }
 
-  const updated = await prisma.meal.update({
+  let updated = await prisma.meal.update({
     where: { id: params.id },
     data: toPrismaData(parsed, components),
   });
+  // a recipe from before slugs existed gets its slug the first time it's
+  // saved; one that already has a slug keeps it even if it was renamed
+  if (!updated.slug) updated = await ensureMealSlug(updated.id, updated.name);
 
   return NextResponse.json(serializeMeal(updated, session.user.email));
 }

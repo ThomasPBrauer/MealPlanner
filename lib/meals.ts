@@ -1,6 +1,7 @@
 import type { Meal as PrismaMeal, Prisma } from "@prisma/client";
 import { Ingredient, Meal, MealVisibility, NutritionInfo } from "./types";
 import { prisma } from "./prisma";
+import { withUniqueSlug } from "./slug";
 
 export function serializeMeal(
   row: PrismaMeal,
@@ -46,6 +47,7 @@ export function serializeMeal(
 
   return {
     id: row.id,
+    slug: row.slug ?? null,
     name: row.name,
     tags,
     primaryProtein: row.primaryProtein,
@@ -223,8 +225,12 @@ export function visibleMealsWhere(email?: string): Prisma.MealWhereInput {
 /** One meal, or null if it doesn't exist or isn't visible to this viewer
  * (a personal meal is only ever visible to its owner). Shared by the recipe
  * pages and the API so both enforce identical visibility. */
-export async function getVisibleMeal(id: string, email?: string) {
-  const row = await prisma.meal.findUnique({ where: { id } });
+export async function getVisibleMeal(idOrSlug: string, email?: string) {
+  // recipe URLs use the slug; the id is still accepted so links made before
+  // slugs existed keep working
+  const row =
+    (await prisma.meal.findUnique({ where: { slug: idOrSlug } })) ??
+    (await prisma.meal.findUnique({ where: { id: idOrSlug } }));
   if (!row) return null;
   if (row.visibility !== "public" && row.ownerEmail !== email) return null;
   return serializeMeal(row, email);
@@ -349,4 +355,21 @@ export function toPrismaData(input: MealInput, sanitizedComponents: string[]) {
     instructions: JSON.stringify(input.instructions),
     components: JSON.stringify(sanitizedComponents),
   };
+}
+
+const slugIsTaken = async (slug: string) =>
+  (await prisma.meal.findUnique({ where: { slug }, select: { id: true } })) !== null;
+
+/** Creates a meal with a slug made from its name, unique across all recipes
+ * ("cancun-shrimp-tacos", then "cancun-shrimp-tacos-2", …). */
+export function createMealWithSlug(
+  data: ReturnType<typeof toPrismaData> & { ownerEmail: string }
+): Promise<PrismaMeal> {
+  return withUniqueSlug<PrismaMeal>(data.name, slugIsTaken, (slug) => prisma.meal.create({ data: { ...data, slug } }));
+}
+
+/** Gives a meal that has no slug yet one. Renaming a recipe deliberately
+ * does NOT change its slug, so links people have shared keep working. */
+export function ensureMealSlug(id: string, name: string): Promise<PrismaMeal> {
+  return withUniqueSlug<PrismaMeal>(name, slugIsTaken, (slug) => prisma.meal.update({ where: { id }, data: { slug } }));
 }
