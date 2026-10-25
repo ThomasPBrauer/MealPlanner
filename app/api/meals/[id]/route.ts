@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { containsCycle, parseMealInput, sanitizeComponentIds, serializeMeal, toPrismaData } from "@/lib/meals";
 
-async function loadVisible(id: string, email: string) {
+async function loadVisible(id: string, email: string | undefined) {
   const meal = await prisma.meal.findUnique({ where: { id } });
   if (!meal) return null;
   if (meal.visibility !== "public" && meal.ownerEmail !== email) return null;
@@ -15,13 +15,13 @@ export async function GET(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
+  // open to anonymous visitors, but loadVisible only ever returns a
+  // personal meal to its owner — everyone else gets public meals only
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-  const meal = await loadVisible(params.id, session.user.email);
+  const email = session?.user?.email ?? undefined;
+  const meal = await loadVisible(params.id, email);
   if (!meal) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  return NextResponse.json(serializeMeal(meal, session.user.email));
+  return NextResponse.json(serializeMeal(meal, email));
 }
 
 export async function PATCH(

@@ -8,15 +8,18 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-  const email = session.user.email;
+  const email = session?.user?.email ?? undefined;
 
   const meal = await prisma.meal.findUnique({ where: { id: params.id } });
   if (!meal) return NextResponse.json({ error: "Not found." }, { status: 404 });
   if (meal.visibility !== "public" && meal.ownerEmail !== email) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  // anonymous visitors can read a public recipe but have no planning
+  // history of their own — and must never see anyone else's
+  if (!email) {
+    return NextResponse.json({ isOwner: false, own: [] });
   }
 
   const isOwner = meal.ownerEmail === email;

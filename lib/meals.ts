@@ -52,7 +52,10 @@ export function serializeMeal(
     primaryCarb: row.primaryCarb,
     minutes: row.minutes,
     servings: row.servings,
-    ownerEmail: row.ownerEmail,
+    // an anonymous viewer (public recipes are readable without signing
+    // in) never gets the owner's address — it's blanked, not just hidden
+    // in the UI
+    ownerEmail: viewerEmail ? row.ownerEmail : "",
     visibility: row.visibility as MealVisibility,
     source: row.source,
     notes: row.notes,

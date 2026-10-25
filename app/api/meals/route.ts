@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -11,18 +12,18 @@ import {
 } from "@/lib/meals";
 
 export async function GET() {
+  // signed-in users see public recipes plus their own; anonymous visitors
+  // get public recipes only (this route is open to GET without a session)
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-  const email = session.user.email;
+  const email = session?.user?.email ?? undefined;
+
+  const where: Prisma.MealWhereInput = email
+    ? { OR: [{ visibility: "public" }, { ownerEmail: email }] }
+    : { visibility: "public" };
 
   const [rows, lastPlanned] = await Promise.all([
-    prisma.meal.findMany({
-      where: { OR: [{ visibility: "public" }, { ownerEmail: email }] },
-      orderBy: { name: "asc" },
-    }),
-    getLastPlannedDates(email),
+    prisma.meal.findMany({ where, orderBy: { name: "asc" } }),
+    email ? getLastPlannedDates(email) : Promise.resolve(new Map<string, string>()),
   ]);
 
   return NextResponse.json({

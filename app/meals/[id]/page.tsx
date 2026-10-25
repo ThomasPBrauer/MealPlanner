@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Meal } from "@/lib/types";
 import { colorForTags } from "@/lib/data";
 import { parseISODateLocal } from "@/lib/date";
@@ -40,6 +41,10 @@ function MealDetailContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // public recipes can be read without an account; signed-out visitors
+  // just don't get the board/history affordances
+  const { status } = useSession();
+  const isAnon = status === "unauthenticated";
   const [meal, setMeal] = useState<MealWithMine | null>(null);
   const [allMeals, setAllMeals] = useState<Meal[]>([]);
   const [history, setHistory] = useState<HistoryResponse | null>(null);
@@ -93,7 +98,7 @@ function MealDetailContent() {
   }
 
   if (notFound || !meal) {
-    const fromBoardParam = searchParams.get("from") === "board";
+    const fromBoardParam = searchParams.get("from") === "board" && !isAnon;
     const weekBackParam = searchParams.get("week");
     const notFoundBackHref = fromBoardParam
       ? weekBackParam
@@ -118,7 +123,7 @@ function MealDetailContent() {
 
   // where "back" should go: the board (on the same week you were viewing)
   // if that's where you double-clicked from, otherwise the meals list
-  const fromBoard = searchParams.get("from") === "board";
+  const fromBoard = searchParams.get("from") === "board" && !isAnon;
   const weekParam = searchParams.get("week");
   const backHref = fromBoard ? (weekParam ? `/?week=${weekParam}` : "/") : "/meals";
   const backLabel = fromBoard ? "← Back to the board" : "← Back to meals";
@@ -134,6 +139,14 @@ function MealDetailContent() {
           <Link href={backHref} className="text-[12px] text-sage/80 transition-colors hover:text-chalk">
             {backLabel}
           </Link>
+          {isAnon && (
+            <Link
+              href={`/login?callbackUrl=${encodeURIComponent(`/meals/${meal.id}`)}`}
+              className="text-[11px] text-sage/90 transition-colors hover:text-gold"
+            >
+              Sign in to plan this meal
+            </Link>
+          )}
           {meal.isMine && (
             <div className="flex items-center gap-3">
               <Link
@@ -310,7 +323,8 @@ function MealDetailContent() {
           </div>
         </div>
 
-        {/* history */}
+        {/* history — only meaningful for a signed-in user */}
+        {status === "authenticated" && (
         <div className="chalk-texture mt-4 rounded-xl bg-board p-6">
           <h2 className="mb-2 font-display text-2xl leading-none text-chalk">History</h2>
           {history && "isOwner" in history && history.isOwner ? (
@@ -348,6 +362,7 @@ function MealDetailContent() {
             <p className="text-[12px] text-sage/70">No history yet.</p>
           )}
         </div>
+        )}
       </div>
     </main>
   );
