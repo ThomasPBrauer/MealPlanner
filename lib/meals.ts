@@ -1,4 +1,4 @@
-import type { Meal as PrismaMeal } from "@prisma/client";
+import type { Meal as PrismaMeal, Prisma } from "@prisma/client";
 import { Ingredient, Meal, MealVisibility, NutritionInfo } from "./types";
 import { prisma } from "./prisma";
 
@@ -210,6 +210,75 @@ export async function getLastPlannedDates(email: string): Promise<Map<string, st
     if (row._max.date) map.set(row.mealId, row._max.date);
   }
   return map;
+}
+
+/** The meals a viewer may see: public ones, plus their own when signed in.
+ * An anonymous viewer (no email) only ever gets public meals. */
+export function visibleMealsWhere(email?: string): Prisma.MealWhereInput {
+  return email
+    ? { OR: [{ visibility: "public" }, { ownerEmail: email }] }
+    : { visibility: "public" };
+}
+
+/** One meal, or null if it doesn't exist or isn't visible to this viewer
+ * (a personal meal is only ever visible to its owner). Shared by the recipe
+ * pages and the API so both enforce identical visibility. */
+export async function getVisibleMeal(id: string, email?: string) {
+  const row = await prisma.meal.findUnique({ where: { id } });
+  if (!row) return null;
+  if (row.visibility !== "public" && row.ownerEmail !== email) return null;
+  return serializeMeal(row, email);
+}
+
+/** Every meal this viewer may see, A–Z. `lastPlannedDate` is only filled in
+ * for a signed-in viewer (and only when asked for — it costs an extra query). */
+export async function listVisibleMeals(email?: string, opts: { withLastPlanned?: boolean } = {}) {
+  const { withLastPlanned = true } = opts;
+  const [rows, lastPlanned] = await Promise.all([
+    prisma.meal.findMany({ where: visibleMealsWhere(email), orderBy: { name: "asc" } }),
+    email && withLastPlanned ? getLastPlannedDates(email) : Promise.resolve(new Map<string, string>()),
+  ]);
+  return rows.map((r) => ({
+    ...serializeMeal(r, email),
+    lastPlannedDate: lastPlanned.get(r.id) ?? null,
+  }));
+}
+
+export type MealHistory =
+  | { isOwner: true; history: { email: string; dates: string[] }[] }
+  | { isOwner: false; own: string[] };
+
+/** Planning history for a meal. The owner sees every user who's planned it;
+ * anyone else sees only their own usage; an anonymous viewer has none. */
+export async function getMealHistory(
+  mealId: string,
+  isOwner: boolean,
+  email?: string
+): Promise<MealHistory> {
+  if (!email) return { isOwner: false, own: [] };
+
+  if (isOwner) {
+    const rows = await prisma.plannedMeal.findMany({
+      where: { mealId },
+      orderBy: { date: "desc" },
+    });
+    const byUser = new Map<string, string[]>();
+    for (const r of rows) {
+      const list = byUser.get(r.email) ?? [];
+      list.push(r.date);
+      byUser.set(r.email, list);
+    }
+    return {
+      isOwner: true,
+      history: Array.from(byUser.entries()).map(([userEmail, dates]) => ({ email: userEmail, dates })),
+    };
+  }
+
+  const rows = await prisma.plannedMeal.findMany({
+    where: { mealId, email },
+    orderBy: { date: "desc" },
+  });
+  return { isOwner: false, own: rows.map((r) => r.date) };
 }
 
 /** Filters a proposed component-id list down to ids that are (a) real

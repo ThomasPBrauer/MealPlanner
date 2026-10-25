@@ -1,18 +1,24 @@
-"use client";
-
-import { Suspense, useEffect, useState } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { notFound } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { getMealHistory, getVisibleMeal, listVisibleMeals } from "@/lib/meals";
 import { Meal } from "@/lib/types";
 import { colorForTags } from "@/lib/data";
 import { parseISODateLocal } from "@/lib/date";
 import { resolveIngredients, resolveInstructionGroups } from "@/lib/recipe";
+import DeleteMealButton from "@/components/DeleteMealButton";
 
-type MealWithMine = Meal & { isMine: boolean };
-type HistoryResponse =
-  | { isOwner: true; history: { email: string; dates: string[] }[] }
-  | { isOwner: false; own: string[] };
+// reads the session (cookies) and the database on every request
+export const dynamic = "force-dynamic";
+
+type PageProps = {
+  params: { id: string };
+  searchParams: { [key: string]: string | string[] | undefined };
+};
+
+const first = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
 
 function isUrl(value: string) {
   return /^https?:\/\//i.test(value.trim());
@@ -30,107 +36,72 @@ const NUTRITION_ROWS: { key: keyof Meal["nutrition"]; label: string; unit: strin
 ];
 
 function formatDate(iso: string) {
-  return parseISODateLocal(iso).toLocaleDateString(undefined, {
+  return parseISODateLocal(iso).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
 }
 
-function MealDetailContent() {
-  const params = useParams<{ id: string }>();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  // public recipes can be read without an account; signed-out visitors
-  // just don't get the board/history affordances
-  const { status } = useSession();
-  const isAnon = status === "unauthenticated";
-  const [meal, setMeal] = useState<MealWithMine | null>(null);
-  const [allMeals, setAllMeals] = useState<Meal[]>([]);
-  const [history, setHistory] = useState<HistoryResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+function describeMeal(meal: Meal): string {
+  const note = meal.notes.trim().split("\n")[0];
+  if (note) return note.length > 200 ? `${note.slice(0, 197)}…` : note;
+  const bits = [meal.tags.join(", ")];
+  if (meal.minutes > 0) bits.push(`${meal.minutes} min`);
+  bits.push(`${meal.servings} serving${meal.servings === 1 ? "" : "s"}`);
+  return `${meal.name} — ${bits.join(" · ")}.`;
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      fetch(`/api/meals/${params.id}`).then((res) => (res.ok ? res.json() : null)),
-      fetch(`/api/meals/${params.id}/history`).then((res) => (res.ok ? res.json() : null)),
-      fetch(`/api/meals`).then((res) => (res.ok ? res.json() : null)),
-    ]).then(([mealData, historyData, mealsData]) => {
-      if (cancelled) return;
-      if (!mealData) {
-        setNotFound(true);
-      } else {
-        setMeal(mealData);
-        setHistory(historyData);
-        setAllMeals(mealsData?.meals ?? []);
-      }
-      setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [params.id]);
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const session = await getServerSession(authOptions);
+  const meal = await getVisibleMeal(params.id, session?.user?.email ?? undefined);
+  if (!meal) return { title: "Recipe not found — The Weekly Board" };
 
-  async function handleDelete() {
-    if (!meal) return;
-    if (!confirm(`Delete "${meal.name}"? This also removes it from everyone's planned history.`)) {
-      return;
-    }
-    setDeleting(true);
-    const res = await fetch(`/api/meals/${meal.id}`, { method: "DELETE" });
-    if (res.ok) {
-      router.push("/meals");
-    } else {
-      setDeleting(false);
-      alert("Couldn't delete this meal — please try again.");
-    }
-  }
+  const title = `${meal.name} — The Weekly Board`;
+  const description = describeMeal(meal);
+  // uploaded photos are stored as base64 data URLs, which are no use as a
+  // link-preview image — only offer one when it's a real URL
+  const image = meal.photo && /^https?:\/\//i.test(meal.photo) ? meal.photo : undefined;
 
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-board p-4 md:p-6">
-        <p className="mx-auto max-w-2xl text-[13px] text-sage/70">Loading…</p>
-      </main>
-    );
-  }
+  return {
+    title,
+    description,
+    // only public recipes are meant to be found; an owner's personal recipe
+    // should never be indexed even if its URL leaks
+    robots: meal.visibility === "public" ? undefined : { index: false, follow: false },
+    openGraph: { title, description, images: image ? [image] : undefined },
+  };
+}
 
-  if (notFound || !meal) {
-    const fromBoardParam = searchParams.get("from") === "board" && !isAnon;
-    const weekBackParam = searchParams.get("week");
-    const notFoundBackHref = fromBoardParam
-      ? weekBackParam
-        ? `/?week=${weekBackParam}`
-        : "/"
-      : "/meals";
-    return (
-      <main className="min-h-screen bg-board p-4 md:p-6">
-        <div className="mx-auto max-w-2xl">
-          <Link href={notFoundBackHref} className="text-[12px] text-sage/80 hover:text-chalk">
-            {fromBoardParam ? "← Back to the board" : "← Back to meals"}
-          </Link>
-          <p className="mt-4 text-[13px] text-sage/70">
-            That meal doesn't exist, or is personal to someone else.
-          </p>
-        </div>
-      </main>
-    );
-  }
+export default async function MealDetailPage({ params, searchParams }: PageProps) {
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email ?? undefined;
+  const signedIn = !!email;
+
+  const [meal, allMeals] = await Promise.all([
+    getVisibleMeal(params.id, email),
+    listVisibleMeals(email, { withLastPlanned: false }),
+  ]);
+  if (!meal) notFound();
+
+  // planning history is per-user, so there's nothing to show signed out
+  const history = signedIn ? await getMealHistory(meal.id, meal.isMine, email) : null;
 
   const accent = colorForTags(meal.tags);
 
   // where "back" should go: the board (on the same week you were viewing)
   // if that's where you double-clicked from, otherwise the meals list
-  const fromBoard = searchParams.get("from") === "board" && !isAnon;
-  const weekParam = searchParams.get("week");
+  const fromBoard = first(searchParams.from) === "board" && signedIn;
+  const weekParam = first(searchParams.week);
   const backHref = fromBoard ? (weekParam ? `/?week=${weekParam}` : "/") : "/meals";
   const backLabel = fromBoard ? "← Back to the board" : "← Back to meals";
   const editHref =
     fromBoard && weekParam
       ? `/meals/${meal.id}/edit?from=board&week=${weekParam}`
       : `/meals/${meal.id}/edit`;
+
+  const resolvedIngredients = resolveIngredients(meal, allMeals);
+  const instructionGroups = resolveInstructionGroups(meal, allMeals);
 
   return (
     <main className="min-h-screen bg-board p-4 md:p-6">
@@ -139,7 +110,7 @@ function MealDetailContent() {
           <Link href={backHref} className="text-[12px] text-sage/80 transition-colors hover:text-chalk">
             {backLabel}
           </Link>
-          {isAnon && (
+          {!signedIn && (
             <Link
               href={`/login?callbackUrl=${encodeURIComponent(`/meals/${meal.id}`)}`}
               className="text-[11px] text-sage/90 transition-colors hover:text-gold"
@@ -155,13 +126,7 @@ function MealDetailContent() {
               >
                 Edit
               </Link>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="text-[11px] text-sage/90 transition-colors hover:text-tomato disabled:opacity-60"
-              >
-                {deleting ? "Deleting…" : "Delete"}
-              </button>
+              <DeleteMealButton mealId={meal.id} mealName={meal.name} />
             </div>
           )}
         </div>
@@ -270,108 +235,88 @@ function MealDetailContent() {
           <div className="space-y-4">
             <div className="rounded-md bg-paper p-4 text-ink shadow-card">
               <h2 className="font-display text-2xl leading-none">Ingredients</h2>
-              {(() => {
-                const resolved = resolveIngredients(meal, allMeals);
-                if (resolved.length === 0) {
-                  return <p className="mt-2 text-[12px] text-ink/50">No ingredients listed.</p>;
-                }
-                return (
-                  <ul className="mt-2 space-y-1 text-[13px]">
-                    {resolved.map((ing, i) => (
-                      <li key={`${ing.id}-${i}`}>
-                        <span className="font-semibold">
-                          {ing.amount} {ing.unit}
-                        </span>{" "}
-                        {ing.name}
-                        {ing.fromMealName && (
-                          <span className="text-ink/45"> — {ing.fromMealName}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                );
-              })()}
+              {resolvedIngredients.length === 0 ? (
+                <p className="mt-2 text-[12px] text-ink/50">No ingredients listed.</p>
+              ) : (
+                <ul className="mt-2 space-y-1 text-[13px]">
+                  {resolvedIngredients.map((ing, i) => (
+                    <li key={`${ing.id}-${i}`}>
+                      <span className="font-semibold">
+                        {ing.amount} {ing.unit}
+                      </span>{" "}
+                      {ing.name}
+                      {ing.fromMealName && (
+                        <span className="text-ink/45"> — {ing.fromMealName}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="rounded-md bg-paper p-4 text-ink shadow-card">
               <h2 className="font-display text-2xl leading-none">Instructions</h2>
-              {(() => {
-                const groups = resolveInstructionGroups(meal, allMeals);
-                if (groups.length === 0) {
-                  return <p className="mt-2 text-[12px] text-ink/50">No instructions yet.</p>;
-                }
-                return (
-                  <div className="mt-2 space-y-3">
-                    {groups.map((group, gi) => (
-                      <div key={gi}>
-                        {groups.length > 1 && (
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/50">
-                            {group.mealName}
-                          </p>
-                        )}
-                        <ol className="list-decimal space-y-1.5 pl-5 text-[13px]">
-                          {group.steps.map((step, si) => (
-                            <li key={si}>{step}</li>
-                          ))}
-                        </ol>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
+              {instructionGroups.length === 0 ? (
+                <p className="mt-2 text-[12px] text-ink/50">No instructions yet.</p>
+              ) : (
+                <div className="mt-2 space-y-3">
+                  {instructionGroups.map((group, gi) => (
+                    <div key={gi}>
+                      {instructionGroups.length > 1 && (
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/50">
+                          {group.mealName}
+                        </p>
+                      )}
+                      <ol className="list-decimal space-y-1.5 pl-5 text-[13px]">
+                        {group.steps.map((step, si) => (
+                          <li key={si}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* history — only meaningful for a signed-in user */}
-        {status === "authenticated" && (
-        <div className="chalk-texture mt-4 rounded-xl bg-board p-6">
-          <h2 className="mb-2 font-display text-2xl leading-none text-chalk">History</h2>
-          {history && "isOwner" in history && history.isOwner ? (
-            history.history.length === 0 ? (
-              <p className="text-[12px] text-sage/70">Nobody's planned this meal yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {history.history.map((entry) => (
-                  <div key={entry.email}>
-                    <p className="text-[12px] text-chalk">
-                      {entry.email}{" "}
-                      <span className="text-sage/60">
-                        · {entry.dates.length} time{entry.dates.length === 1 ? "" : "s"}
-                      </span>
-                    </p>
-                    <p className="text-[11px] text-sage/70">
-                      {entry.dates.slice(0, 8).map(formatDate).join(", ")}
-                      {entry.dates.length > 8 && `, +${entry.dates.length - 8} more`}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )
-          ) : history && "own" in history ? (
-            history.own.length === 0 ? (
-              <p className="text-[12px] text-sage/70">You haven't planned this meal yet.</p>
+        {history && (
+          <div className="chalk-texture mt-4 rounded-xl bg-board p-6">
+            <h2 className="mb-2 font-display text-2xl leading-none text-chalk">History</h2>
+            {history.isOwner ? (
+              history.history.length === 0 ? (
+                <p className="text-[12px] text-sage/70">Nobody&apos;s planned this meal yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {history.history.map((entry) => (
+                    <div key={entry.email}>
+                      <p className="text-[12px] text-chalk">
+                        {entry.email}{" "}
+                        <span className="text-sage/60">
+                          · {entry.dates.length} time{entry.dates.length === 1 ? "" : "s"}
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-sage/70">
+                        {entry.dates.slice(0, 8).map(formatDate).join(", ")}
+                        {entry.dates.length > 8 && `, +${entry.dates.length - 8} more`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : history.own.length === 0 ? (
+              <p className="text-[12px] text-sage/70">You haven&apos;t planned this meal yet.</p>
             ) : (
               <p className="text-[12px] text-sage/80">
-                You've planned this {history.own.length} time{history.own.length === 1 ? "" : "s"}:{" "}
+                You&apos;ve planned this {history.own.length} time{history.own.length === 1 ? "" : "s"}:{" "}
                 <span className="text-sage/60">{history.own.slice(0, 8).map(formatDate).join(", ")}</span>
                 {history.own.length > 8 && ` +${history.own.length - 8} more`}
               </p>
-            )
-          ) : (
-            <p className="text-[12px] text-sage/70">No history yet.</p>
-          )}
-        </div>
+            )}
+          </div>
         )}
       </div>
     </main>
-  );
-}
-
-export default function MealDetailPage() {
-  return (
-    <Suspense fallback={null}>
-      <MealDetailContent />
-    </Suspense>
   );
 }

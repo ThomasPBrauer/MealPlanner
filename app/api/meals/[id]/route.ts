@@ -2,26 +2,26 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { containsCycle, parseMealInput, sanitizeComponentIds, serializeMeal, toPrismaData } from "@/lib/meals";
-
-async function loadVisible(id: string, email: string | undefined) {
-  const meal = await prisma.meal.findUnique({ where: { id } });
-  if (!meal) return null;
-  if (meal.visibility !== "public" && meal.ownerEmail !== email) return null;
-  return meal;
-}
+import {
+  containsCycle,
+  getVisibleMeal,
+  parseMealInput,
+  sanitizeComponentIds,
+  serializeMeal,
+  toPrismaData,
+} from "@/lib/meals";
 
 export async function GET(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
-  // open to anonymous visitors, but loadVisible only ever returns a
+  // open to anonymous visitors, but getVisibleMeal only ever returns a
   // personal meal to its owner — everyone else gets public meals only
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? undefined;
-  const meal = await loadVisible(params.id, email);
+  const meal = await getVisibleMeal(params.id, email);
   if (!meal) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  return NextResponse.json(serializeMeal(meal, email));
+  return NextResponse.json(meal);
 }
 
 export async function PATCH(

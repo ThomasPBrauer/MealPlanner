@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
-  getLastPlannedDates,
+  listVisibleMeals,
   parseMealInput,
   sanitizeComponentIds,
   serializeMeal,
@@ -16,22 +15,7 @@ export async function GET() {
   // get public recipes only (this route is open to GET without a session)
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? undefined;
-
-  const where: Prisma.MealWhereInput = email
-    ? { OR: [{ visibility: "public" }, { ownerEmail: email }] }
-    : { visibility: "public" };
-
-  const [rows, lastPlanned] = await Promise.all([
-    prisma.meal.findMany({ where, orderBy: { name: "asc" } }),
-    email ? getLastPlannedDates(email) : Promise.resolve(new Map<string, string>()),
-  ]);
-
-  return NextResponse.json({
-    meals: rows.map((r) => ({
-      ...serializeMeal(r, email),
-      lastPlannedDate: lastPlanned.get(r.id) ?? null,
-    })),
-  });
+  return NextResponse.json({ meals: await listVisibleMeals(email) });
 }
 
 export async function POST(req: Request) {

@@ -1,4 +1,5 @@
 import { Ingredient } from "./types";
+import { isUnitOnly, matchLeadingUnit } from "./units";
 
 export interface ExtractedRecipe {
   name?: string;
@@ -18,17 +19,6 @@ export interface ExtractedRecipe {
   };
 }
 
-const UNIT_WORDS = [
-  "cups?", "tablespoons?", "tbsp\\.?", "teaspoons?", "tsp\\.?",
-  "ounces?", "oz\\.?", "pounds?", "lbs?\\.?",
-  "grams?", "g\\b", "kilograms?", "kg\\b",
-  "milliliters?", "ml\\b", "liters?", "l\\b",
-  "cloves?", "pinche?s?", "dashe?s?", "cans?", "packages?", "pkgs?\\.?",
-  "slices?", "sprigs?", "stalks?", "bunche?s?",
-  "large", "medium", "small", "whole",
-];
-const UNIT_RE = new RegExp(`^(${UNIT_WORDS.join("|")})\\b`, "i");
-
 const FRACTION_MAP: Record<string, string> = {
   "½": "1/2", "⅓": "1/3", "⅔": "2/3", "¼": "1/4", "¾": "3/4",
   "⅕": "1/5", "⅖": "2/5", "⅗": "3/5", "⅘": "4/5", "⅙": "1/6",
@@ -36,45 +26,123 @@ const FRACTION_MAP: Record<string, string> = {
 };
 
 function normalizeFractions(s: string): string {
-  return s.replace(/[½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]/g, (m) => FRACTION_MAP[m] ?? m);
+  return (
+    s
+      // "1½" must become "1 1/2", not "11/2" — keep a digit that sits right
+      // against a vulgar fraction as a separate whole-number part
+      .replace(/(\d)?([½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])/g, (_m, digit: string | undefined, frac: string) =>
+        `${digit ? `${digit} ` : ""}${FRACTION_MAP[frac] ?? frac}`
+      )
+      // "1-1/2 cups" is one and a half, not the range "1" to "1/2" (the
+      // leading group keeps "1/3-1/2", a real range, from matching)
+      .replace(/(^|[^\d/])(\d+)-(\d+\/\d+)/g, "$1$2 $3")
+  );
 }
 
 function stripHtml(s: string): string {
   return s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+// A quantity: "2", "1.5", "1/2", "2 1/2", or a range of those ("2-3",
+// "1 to 2"). Whatever follows is left for the unit / name.
+const NUM = "(?:\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d+(?:\\.\\d+)?)";
+const QTY_RE = new RegExp(`^(${NUM}(?:\\s*[-–]\\s*${NUM}|\\s+to\\s+${NUM})?)\\s*`);
+
+// "(15 oz)" / "(240 ml)" — a size or alternate measure. Requires a leading
+// digit so "(optional)" and "(divided)" are left alone.
+const PAREN_MEASURE_RE = /^\((\d[^)]*)\)\s*/;
+
+// checkbox / bullet glyphs that ride along when a recipe list is copied
+const BULLET_RE = /^[•▢☐□■▪◦·*✓✔\-–—]+\s*/;
+
+function leadingQuantity(line: string): { amount: string; after: string } | null {
+  const m = line.match(QTY_RE);
+  return m ? { amount: m[1], after: line.slice(m[0].length) } : null;
+}
+
+export interface SplitOptions {
+  /** Store the unit in its canonical form ("Cups" -> "C"). Off by default so
+   * callers that just want the text split keep the unit as written. */
+  standardizeUnits?: boolean;
+}
+
 /** Best-effort split of a free-text ingredient line ("2 1/2 cups flour",
- * "3 large eggs, beaten") into amount / unit / name. Falls back to putting
- * the whole line in `name` if it doesn't recognize a leading quantity. */
-export function splitIngredientLine(raw: string): Ingredient {
-  const line = normalizeFractions(decodeEntities(stripHtml(raw))).replace(/\s+/g, " ").trim();
-  const qtyMatch = line.match(
-    /^((?:\d+\s+\d+\/\d+)|(?:\d+\/\d+)|(?:\d+(?:\.\d+)?)(?:\s*[-–]\s*\d+(?:\.\d+)?)?)\s*/
-  );
-  if (!qtyMatch) {
+ * "3 large eggs, beaten", "1 (15 oz) can black beans") into amount / unit /
+ * name. Falls back to putting the whole line in `name` if it doesn't
+ * recognize a leading quantity. */
+export function splitIngredientLine(raw: string, opts: SplitOptions = {}): Ingredient {
+  const line = normalizeFractions(decodeEntities(stripHtml(raw)))
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(BULLET_RE, "");
+  const q = leadingQuantity(line);
+  if (!q) {
     return { id: "", name: line, amount: "", unit: "", department: "" };
   }
-  const amount = qtyMatch[1];
-  const afterQty = line.slice(qtyMatch[0].length);
-  const unitMatch = afterQty.match(UNIT_RE);
 
-  if (unitMatch) {
-    const afterUnit = afterQty
-      .slice(unitMatch[0].length)
-      .replace(/^\.?\s*/, "")
-      .replace(/^of\s+/i, "")
-      .trim();
+  let after = q.after;
+  // a size note can sit between the quantity and the unit:
+  // "1 (15 oz) can black beans" -> 1 can "black beans (15 oz)"
+  let aside = "";
+  const preParen = after.match(PAREN_MEASURE_RE);
+  if (preParen && matchLeadingUnit(after.slice(preParen[0].length))) {
+    aside = preParen[1];
+    after = after.slice(preParen[0].length);
+  }
+
+  const u = matchLeadingUnit(after);
+  if (u) {
+    const stripOf = (t: string) => t.replace(/^of\s+/i, "");
+    let rest = stripOf(u.rest);
+    // ...or right after it: "1 cup (120 g) flour"
+    const postParen = rest.match(PAREN_MEASURE_RE);
+    if (postParen && !aside) {
+      aside = postParen[1];
+      rest = stripOf(rest.slice(postParen[0].length));
+    }
+    rest = rest.trim();
     // only treat it as a real unit if something is actually left for the
     // ingredient name — otherwise a source string that's just "4 oz" with
     // no name would silently produce a blank name, which is worse than
     // just leaving the whole thing unsplit
-    if (afterUnit.length > 0) {
-      return { id: "", name: afterUnit, amount, unit: unitMatch[0].replace(/\.$/, ""), department: "" };
+    if (rest.length > 0) {
+      return {
+        id: "",
+        name: aside ? `${rest} (${aside})` : rest,
+        amount: q.amount,
+        unit: opts.standardizeUnits ? u.unit : u.raw,
+        department: "",
+      };
     }
   }
 
-  const rest = afterQty.replace(/^of\s+/i, "").trim();
-  return { id: "", name: rest || line, amount, unit: "", department: "" };
+  const rest = q.after.replace(/^of\s+/i, "").trim();
+  return { id: "", name: rest || line, amount: q.amount, unit: "", department: "" };
+}
+
+/** Pasted recipe pages often put an ingredient's quantity, unit and name on
+ * separate lines ("1" / "cup" / "blueberries", or "1 cup" / "blueberries").
+ * Stitches those back into single lines so each one parses as a whole; lines
+ * that already carry a name are left alone. */
+function mergeSplitIngredientLines(lines: string[]): string[] {
+  const normalized = (l: string) => normalizeFractions(decodeEntities(l)).replace(/\s+/g, " ").trim().replace(BULLET_RE, "");
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    let cur = lines[i];
+    const q = leadingQuantity(normalized(cur));
+    if (q && i + 1 < lines.length) {
+      if (q.after === "") {
+        // just a quantity — the unit and/or name follow on the next line(s)
+        cur = `${cur} ${lines[++i]}`;
+        if (isUnitOnly(lines[i]) && i + 1 < lines.length) cur = `${cur} ${lines[++i]}`;
+      } else if (isUnitOnly(q.after)) {
+        // quantity + unit with the name on the next line
+        cur = `${cur} ${lines[++i]}`;
+      }
+    }
+    out.push(cur);
+  }
+  return out;
 }
 
 function decodeEntities(s: string): string {
@@ -241,7 +309,7 @@ export async function extractRecipeFromUrl(targetUrl: string): Promise<ExtractRe
       : [];
   const ingredients = rawIngredients
     .filter((s) => typeof s === "string" && s.trim())
-    .map((s, i) => ({ ...splitIngredientLine(s), id: `ing-${i}` }));
+    .map((s, i) => ({ ...splitIngredientLine(s, { standardizeUnits: true }), id: `ing-${i}` }));
 
   const instructions = extractInstructionSteps(r.recipeInstructions);
 
@@ -392,10 +460,11 @@ export function parseRecipeText(raw: string): ExtractResult {
   const ingredients: Ingredient[] =
     ingredientsStart === -1
       ? []
-      : lines
-          .slice(ingredientsStart + 1, directionsStart === -1 ? undefined : directionsStart)
-          .filter((l) => !INGREDIENT_NOISE_RE.test(l))
-          .map((l, i) => ({ ...splitIngredientLine(l), id: `ing-${i}` }));
+      : mergeSplitIngredientLines(
+          lines
+            .slice(ingredientsStart + 1, directionsStart === -1 ? undefined : directionsStart)
+            .filter((l) => !INGREDIENT_NOISE_RE.test(l))
+        ).map((l, i) => ({ ...splitIngredientLine(l, { standardizeUnits: true }), id: `ing-${i}` }));
 
   const instructions: string[] =
     directionsStart === -1
