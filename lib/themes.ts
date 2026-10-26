@@ -1,4 +1,5 @@
 import { BODY_FONT_OPTIONS, FONT_OPTIONS } from "./fonts";
+import { PatternKey, isPatternKey } from "./patterns";
 import type { BodyFontKey, DisplayFontKey, ThemeColors } from "./types";
 
 // A theme is a named bundle of the two fonts and five colors a user can
@@ -13,6 +14,8 @@ export interface ThemeData {
   displayFont: DisplayFontKey;
   bodyFont: BodyFontKey;
   colors: ThemeColors;
+  /** tablecloth-style texture behind the board, tinted with colors.pattern */
+  pattern: PatternKey;
 }
 
 export interface ThemeSummary extends ThemeData {
@@ -36,6 +39,7 @@ export const THEME_NAME_MAX = 40;
 //   board  page background          chalk  main text on the board
 //   panel  calendar/pantry surface  gold   primary accent (headings, buttons)
 //   tomato secondary accent (remove / error states)
+//   pattern the tint of the background pattern (only used if `pattern` isn't "none")
 // Buttons put the app's fixed dark "ink" text on `gold`, so it has to stay
 // light enough for that.
 // ---------------------------------------------------------------------------
@@ -47,63 +51,72 @@ export const BUILT_IN_THEMES: readonly (ThemeData & { name: string })[] = [
     name: "Chalkboard",
     displayFont: "caveat",
     bodyFont: "workSans",
-    colors: { board: "#1F2A24", panel: "#26332C", gold: "#E8B04B", tomato: "#C1502E", chalk: "#F3EFE3" },
+    colors: { board: "#1F2A24", panel: "#26332C", gold: "#E8B04B", tomato: "#C1502E", chalk: "#F3EFE3", pattern: "#F3EFE3" },
+    pattern: "none",
   },
   {
     // charcoal and champagne
     name: "Elegant",
     displayFont: "cormorant",
     bodyFont: "lora",
-    colors: { board: "#1B1B24", panel: "#262632", gold: "#D9BC8C", tomato: "#D77A7A", chalk: "#F5F0E8" },
+    colors: { board: "#1B1B24", panel: "#262632", gold: "#D9BC8C", tomato: "#D77A7A", chalk: "#F5F0E8", pattern: "#927F5C" },
+    pattern: "diamonds",
   },
   {
     // dark walnut, wheat and barn red
     name: "Country",
     displayFont: "breeSerif",
     bodyFont: "lora",
-    colors: { board: "#2E2118", panel: "#3B2C20", gold: "#E3B96B", tomato: "#D0644C", chalk: "#F4EBDD" },
+    colors: { board: "#2E2118", panel: "#3B2C20", gold: "#E3B96B", tomato: "#D0644C", chalk: "#F4EBDD", pattern: "#94392E" },
+    pattern: "gingham",
   },
   {
     // cocoa, buttercream and raspberry
     name: "Baker",
     displayFont: "dancingScript",
     bodyFont: "nunito",
-    colors: { board: "#2B1D1A", panel: "#3A2824", gold: "#F2C6A0", tomato: "#EA7C8B", chalk: "#FFF4E6" },
+    colors: { board: "#2B1D1A", panel: "#3A2824", gold: "#F2C6A0", tomato: "#EA7C8B", chalk: "#FFF4E6", pattern: "#B8636E" },
+    pattern: "polka",
   },
   {
     // forest green and new growth
     name: "Garden",
     displayFont: "amaticSC",
     bodyFont: "lato",
-    colors: { board: "#17261C", panel: "#203428", gold: "#D7E58A", tomato: "#EA7B73", chalk: "#F1F6E8" },
+    colors: { board: "#17261C", panel: "#203428", gold: "#D7E58A", tomato: "#EA7B73", chalk: "#F1F6E8", pattern: "#517347" },
+    pattern: "grid",
   },
   {
     // deep sea, sand and coral
     name: "Coastal",
     displayFont: "josefinSans",
     bodyFont: "openSans",
-    colors: { board: "#12232E", panel: "#1B3342", gold: "#F0D9A0", tomato: "#F08470", chalk: "#EEF5F7" },
+    colors: { board: "#12232E", panel: "#1B3342", gold: "#F0D9A0", tomato: "#F08470", chalk: "#EEF5F7", pattern: "#A09777" },
+    pattern: "stripes",
   },
   {
     // plum, pumpkin and cranberry
     name: "Harvest",
     displayFont: "dmSerifDisplay",
     bodyFont: "sourceSerif",
-    colors: { board: "#2A1C26", panel: "#38283A", gold: "#F2A65A", tomato: "#E0605F", chalk: "#F6EBDD" },
+    colors: { board: "#2A1C26", panel: "#38283A", gold: "#F2A65A", tomato: "#E0605F", chalk: "#F6EBDD", pattern: "#F2A65A" },
+    pattern: "none",
   },
   {
     // near-black with a cool mint accent
     name: "Midnight",
     displayFont: "poppins",
     bodyFont: "inter",
-    colors: { board: "#0F1115", panel: "#191C23", gold: "#6EE7B7", tomato: "#FB7185", chalk: "#E6EAF0" },
+    colors: { board: "#0F1115", panel: "#191C23", gold: "#6EE7B7", tomato: "#FB7185", chalk: "#E6EAF0", pattern: "#6EE7B7" },
+    pattern: "none",
   },
   {
     // teal menu board, mustard and cherry
     name: "Retro Diner",
     displayFont: "fredericka",
     bodyFont: "workSans",
-    colors: { board: "#1C2B33", panel: "#26394A", gold: "#F4D35E", tomato: "#F0705F", chalk: "#FAF3DD" },
+    colors: { board: "#1C2B33", panel: "#26394A", gold: "#F4D35E", tomato: "#F0705F", chalk: "#FAF3DD", pattern: "#B95E54" },
+    pattern: "checkerboard",
   },
 ];
 
@@ -136,13 +149,17 @@ export const BUILT_IN_KEYS: ReadonlySet<string> = new Set(BUILT_IN_THEMES.map((t
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const COLOR_KEYS = ["board", "panel", "gold", "tomato", "chalk"] as const;
+const DEFAULT_PATTERN_TINT = "#f3efe3";
 
 /** True when two themes would look identical (hex case doesn't matter). */
 export function themeMatches(a: ThemeData, b: ThemeData): boolean {
   return (
     a.displayFont === b.displayFont &&
     a.bodyFont === b.bodyFont &&
-    COLOR_KEYS.every((k) => a.colors[k].toLowerCase() === b.colors[k].toLowerCase())
+    a.pattern === b.pattern &&
+    COLOR_KEYS.every((k) => a.colors[k].toLowerCase() === b.colors[k].toLowerCase()) &&
+    // the tint only matters when there is a pattern to tint
+    (a.pattern === "none" || a.colors.pattern.toLowerCase() === b.colors.pattern.toLowerCase())
   );
 }
 
@@ -185,5 +202,15 @@ export function parseThemeInput(body: unknown): ParsedThemeInput {
     colors[key] = value.toLowerCase();
   }
 
-  return { ok: true, name, data: { displayFont: b.displayFont, bodyFont: b.bodyFont, colors } };
+  // the pattern is optional so a request from before patterns existed still
+  // saves (as a plain theme)
+  const pattern = b.pattern === undefined ? "none" : b.pattern;
+  if (!isPatternKey(pattern)) return { ok: false, error: "Unknown background pattern." };
+  const tint = rawColors.pattern === undefined ? DEFAULT_PATTERN_TINT : rawColors.pattern;
+  if (typeof tint !== "string" || !HEX_COLOR.test(tint)) {
+    return { ok: false, error: "The pattern color isn't a valid color." };
+  }
+  colors.pattern = tint.toLowerCase();
+
+  return { ok: true, name, data: { displayFont: b.displayFont, bodyFont: b.bodyFont, colors, pattern } };
 }

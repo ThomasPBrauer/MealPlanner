@@ -16,6 +16,7 @@ import {
   ThemeColors,
 } from "@/lib/types";
 import { applyTheme } from "@/lib/theme";
+import { PATTERN_OPTIONS, PatternKey, isPatternKey, patternCss } from "@/lib/patterns";
 import { groupFonts } from "@/lib/fonts";
 import { DEFAULT_THEME_NAME, ThemeSummary } from "@/lib/themes";
 import ThemeSettings from "@/components/ThemeSettings";
@@ -26,6 +27,7 @@ const COLOR_FIELDS: { key: keyof ThemeColors; label: string; hint: string }[] = 
   { key: "gold", label: "Primary accent", hint: "Headings, highlights, buttons" },
   { key: "tomato", label: "Secondary accent", hint: "Remove/error states, tags" },
   { key: "chalk", label: "Text", hint: "Main text on dark surfaces" },
+  { key: "pattern", label: "Pattern color", hint: "Tint of the background pattern" },
 ];
 
 export default function SettingsPage() {
@@ -47,6 +49,7 @@ export default function SettingsPage() {
           displayFont: data.displayFont ?? DEFAULT_PREFERENCES.displayFont,
           bodyFont: data.bodyFont ?? DEFAULT_PREFERENCES.bodyFont,
           colors: { ...DEFAULT_PREFERENCES.colors, ...(data.colors ?? {}) },
+          backgroundPattern: isPatternKey(data.backgroundPattern) ? data.backgroundPattern : "none",
           themeName: data.themeName ?? null,
           visibleNutrients: data.visibleNutrients ?? DEFAULT_PREFERENCES.visibleNutrients,
           hideCheckedItems: data.hideCheckedItems ?? DEFAULT_PREFERENCES.hideCheckedItems,
@@ -90,6 +93,7 @@ export default function SettingsPage() {
       displayFont: theme.displayFont,
       bodyFont: theme.bodyFont,
       colors: theme.colors,
+      backgroundPattern: theme.pattern,
     });
   }
 
@@ -99,6 +103,7 @@ export default function SettingsPage() {
       displayFont: DEFAULT_PREFERENCES.displayFont,
       bodyFont: DEFAULT_PREFERENCES.bodyFont,
       colors: DEFAULT_PREFERENCES.colors,
+      backgroundPattern: DEFAULT_PREFERENCES.backgroundPattern,
     });
   }
 
@@ -214,7 +219,12 @@ export default function SettingsPage() {
               </fieldset>
 
               <ThemeSettings
-                current={{ displayFont: prefs.displayFont, bodyFont: prefs.bodyFont, colors: prefs.colors }}
+                current={{
+                  displayFont: prefs.displayFont,
+                  bodyFont: prefs.bodyFont,
+                  colors: prefs.colors,
+                  pattern: prefs.backgroundPattern,
+                }}
                 themeName={prefs.themeName}
                 onPick={handlePickTheme}
                 onNameSaved={(name) => update({ themeName: name })}
@@ -282,6 +292,43 @@ export default function SettingsPage() {
                       ))}
                     </select>
                   </div>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-sage">
+                  Background pattern
+                </legend>
+                <p className="mb-2 text-[11px] text-sage/70">
+                  A subtle texture behind the board, tinted with the pattern color below.
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  {PATTERN_OPTIONS.map((p) => {
+                    const css = patternCss(p.key, prefs.colors.pattern);
+                    const selected = prefs.backgroundPattern === p.key;
+                    return (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => update({ backgroundPattern: p.key as PatternKey })}
+                        aria-pressed={selected}
+                        className={`rounded-md border p-1 text-center transition-colors ${
+                          selected ? "border-gold" : "border-white/10 hover:border-gold/50"
+                        }`}
+                      >
+                        <span
+                          className="mb-1 block h-10 rounded border border-white/10"
+                          style={{
+                            backgroundColor: prefs.colors.board,
+                            backgroundImage: css.image,
+                            backgroundSize: css.size,
+                            backgroundPosition: css.position,
+                          }}
+                        />
+                        <span className="block text-[10.5px] text-chalk">{p.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </fieldset>
 

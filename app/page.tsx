@@ -29,6 +29,7 @@ import {
 } from "@/lib/types";
 import { colorForTags } from "@/lib/data";
 import { applyTheme } from "@/lib/theme";
+import { isPatternKey } from "@/lib/patterns";
 import { addDays, parseISODateLocal, startOfWeek, toISODate } from "@/lib/date";
 import { isVirtualOffMeal, offCodeFromMealId } from "@/lib/openfoodfacts";
 
@@ -100,6 +101,7 @@ function BoardContent() {
               displayFont: data.displayFont ?? DEFAULT_PREFERENCES.displayFont,
               bodyFont: data.bodyFont ?? DEFAULT_PREFERENCES.bodyFont,
               colors: { ...DEFAULT_PREFERENCES.colors, ...(data.colors ?? {}) },
+              backgroundPattern: isPatternKey(data.backgroundPattern) ? data.backgroundPattern : "none",
               visibleNutrients: data.visibleNutrients ?? DEFAULT_PREFERENCES.visibleNutrients,
               hideCheckedItems: data.hideCheckedItems ?? DEFAULT_PREFERENCES.hideCheckedItems,
               hideCompletedDepartments: data.hideCompletedDepartments ?? DEFAULT_PREFERENCES.hideCompletedDepartments,

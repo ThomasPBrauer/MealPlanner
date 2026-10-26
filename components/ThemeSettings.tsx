@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BODY_FONT_OPTIONS, FONT_OPTIONS } from "@/lib/fonts";
+import { patternCss } from "@/lib/patterns";
 import {
   THEME_NAME_MAX,
   ThemeData,
@@ -93,6 +94,7 @@ export default function ThemeSettings({ current, themeName, onPick, onNameSaved,
           displayFont: current.displayFont,
           bodyFont: current.bodyFont,
           colors: current.colors,
+          pattern: current.pattern,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -136,6 +138,7 @@ export default function ThemeSettings({ current, themeName, onPick, onNameSaved,
 
   function renderCard(theme: ThemeSummary) {
     const selected = !!themeName && themeNameKey(theme.name) === themeNameKey(themeName);
+    const pattern = patternCss(theme.pattern, theme.colors.pattern);
     return (
       <li key={theme.id} className="relative">
         <button
@@ -145,7 +148,12 @@ export default function ThemeSettings({ current, themeName, onPick, onNameSaved,
           className={`block w-full rounded-md border px-3 py-2.5 text-left transition-colors ${
             selected ? "border-gold" : "border-white/10 hover:border-gold/50"
           }`}
-          style={{ backgroundColor: theme.colors.board }}
+          style={{
+            backgroundColor: theme.colors.board,
+            backgroundImage: pattern.image,
+            backgroundSize: pattern.size,
+            backgroundPosition: pattern.position,
+          }}
         >
           <span
             className="block truncate pr-5 text-[20px] leading-tight"

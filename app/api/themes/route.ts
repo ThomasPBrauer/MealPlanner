@@ -23,6 +23,7 @@ export async function GET() {
     displayFont: t.displayFont,
     bodyFont: t.bodyFont,
     colors: t.colors,
+    pattern: t.pattern,
   }));
 
   return NextResponse.json({ themes: [...builtIn, ...rows.map((r) => rowToSummary(r, email))] });

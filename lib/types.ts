@@ -142,6 +142,7 @@ export interface ThemeColors {
   gold: string; // primary accent
   tomato: string; // secondary accent (also used for remove/error states)
   chalk: string; // main text color on dark surfaces
+  pattern: string; // tint of the background pattern (unused while the pattern is "Plain")
 }
 
 export const DEFAULT_THEME_COLORS: ThemeColors = {
@@ -150,10 +151,12 @@ export const DEFAULT_THEME_COLORS: ThemeColors = {
   gold: "#E8B04B",
   tomato: "#C1502E",
   chalk: "#F3EFE3",
+  pattern: "#F3EFE3",
 };
 
 // the font catalogue lives in lib/fonts.ts; re-exported so existing imports keep working
 import { BODY_FONT_OPTIONS, FONT_OPTIONS } from "./fonts";
+import type { PatternKey } from "./patterns";
 export { BODY_FONT_OPTIONS, FONT_OPTIONS };
 
 export type DisplayFontKey = (typeof FONT_OPTIONS)[number]["key"];
@@ -165,6 +168,7 @@ export interface Preferences {
   displayFont: DisplayFontKey;
   bodyFont: BodyFontKey;
   colors: ThemeColors;
+  backgroundPattern: PatternKey; // tablecloth-style texture behind the board (lib/patterns.ts)
   themeName?: string | null; // the theme these fonts/colors started from (may since have been tweaked)
   visibleNutrients: NutritionKey[]; // which nutrition fields to surface on Meal Cards & day totals
   hideCheckedItems: boolean; // shopping list: hide checked items instead of showing them struck through
@@ -178,6 +182,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   displayFont: "caveat",
   bodyFont: "workSans",
   colors: DEFAULT_THEME_COLORS,
+  backgroundPattern: "none",
   themeName: null,
   visibleNutrients: ["calories"],
   hideCheckedItems: false,

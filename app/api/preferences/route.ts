@@ -13,6 +13,7 @@ import {
   Orientation,
 } from "@/lib/types";
 import { THEME_NAME_MAX, cleanThemeName } from "@/lib/themes";
+import { isPatternKey } from "@/lib/patterns";
 
 const VALID_DAYS = DAYS.map((d) => d.key);
 const VALID_DISPLAY_FONTS = FONT_OPTIONS.map((f) => f.key);
@@ -96,7 +97,9 @@ export async function GET() {
       gold: prefs?.colorGold ?? DEFAULT_PREFERENCES.colors.gold,
       tomato: prefs?.colorTomato ?? DEFAULT_PREFERENCES.colors.tomato,
       chalk: prefs?.colorChalk ?? DEFAULT_PREFERENCES.colors.chalk,
+      pattern: prefs?.colorPattern ?? DEFAULT_PREFERENCES.colors.pattern,
     },
+    backgroundPattern: isPatternKey(prefs?.backgroundPattern) ? prefs?.backgroundPattern : "none",
     themeName: prefs?.themeName ?? null,
     visibleNutrients: parseVisibleNutrients(prefs?.visibleNutrients),
     hideCheckedItems: prefs?.hideCheckedItems ?? DEFAULT_PREFERENCES.hideCheckedItems,
@@ -134,6 +137,8 @@ export async function PUT(req: Request) {
   const colorGold = sanitizeHex(colors.gold, DEFAULT_PREFERENCES.colors.gold);
   const colorTomato = sanitizeHex(colors.tomato, DEFAULT_PREFERENCES.colors.tomato);
   const colorChalk = sanitizeHex(colors.chalk, DEFAULT_PREFERENCES.colors.chalk);
+  const colorPattern = sanitizeHex(colors.pattern, DEFAULT_PREFERENCES.colors.pattern);
+  const backgroundPattern = isPatternKey(body.backgroundPattern) ? body.backgroundPattern : "none";
   const visibleNutrients = sanitizeVisibleNutrients(body.visibleNutrients).join(",");
   const hideCheckedItems = Boolean(body.hideCheckedItems);
   const hideCompletedDepartments = Boolean(body.hideCompletedDepartments);
@@ -150,6 +155,8 @@ export async function PUT(req: Request) {
     colorGold,
     colorTomato,
     colorChalk,
+    colorPattern,
+    backgroundPattern,
     themeName: sanitizeThemeName(body.themeName),
     visibleNutrients,
     hideCheckedItems,
@@ -174,7 +181,9 @@ export async function PUT(req: Request) {
       gold: prefs.colorGold,
       tomato: prefs.colorTomato,
       chalk: prefs.colorChalk,
+      pattern: prefs.colorPattern,
     },
+    backgroundPattern: isPatternKey(prefs.backgroundPattern) ? prefs.backgroundPattern : "none",
     themeName: prefs.themeName,
     visibleNutrients: parseVisibleNutrients(prefs.visibleNutrients),
     hideCheckedItems: prefs.hideCheckedItems,

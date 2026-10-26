@@ -1,3 +1,4 @@
+import { patternCss } from "./patterns";
 import {
   BODY_FONT_OPTIONS,
   FONT_OPTIONS,
@@ -41,6 +42,9 @@ const THEME_PROPERTIES = [
   "--color-chalk-rgb",
   "--font-display",
   "--font-body",
+  "--bg-pattern-image",
+  "--bg-pattern-size",
+  "--bg-pattern-position",
 ] as const;
 
 export function applyTheme(prefs: Preferences) {
@@ -57,6 +61,11 @@ export function applyTheme(prefs: Preferences) {
 
   const display = FONT_OPTIONS.find((f) => f.key === prefs.displayFont)?.family;
   const body = BODY_FONT_OPTIONS.find((f) => f.key === prefs.bodyFont)?.family;
+  const pattern = patternCss(prefs.backgroundPattern ?? "none", colors.pattern ?? colors.chalk);
+  root.setProperty("--bg-pattern-image", pattern.image);
+  root.setProperty("--bg-pattern-size", pattern.size);
+  root.setProperty("--bg-pattern-position", pattern.position);
+
   if (display) root.setProperty("--font-display", display);
   if (body) root.setProperty("--font-body", body);
 }

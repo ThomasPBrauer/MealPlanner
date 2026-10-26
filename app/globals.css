@@ -17,6 +17,12 @@
   --color-gold-rgb: 232 176 75; /* #E8B04B */
   --color-tomato-rgb: 193 80 46; /* #C1502E */
   --color-chalk-rgb: 243 239 227; /* #F3EFE3 */
+
+  /* background pattern (see lib/patterns.ts) — "none" until a theme or the
+     user picks one; set at runtime by lib/theme.ts */
+  --bg-pattern-image: none;
+  --bg-pattern-size: auto;
+  --bg-pattern-position: 0 0;
 }
 
 html,
@@ -27,6 +33,18 @@ body {
 body {
   background-color: rgb(var(--color-board-rgb));
   color: rgb(var(--color-chalk-rgb));
+}
+
+/* the pattern goes on the page and on every plain board-colored surface.
+   "fixed" pins it to the viewport so nested surfaces (the page, the cards on
+   it, sticky headers inside them) all show the same pattern and join up
+   without seams; panels, inputs and recipe cards stay solid on top. */
+body,
+.bg-board {
+  background-image: var(--bg-pattern-image);
+  background-size: var(--bg-pattern-size);
+  background-position: var(--bg-pattern-position);
+  background-attachment: fixed;
 }
 
 /* faint chalk dust / scratch texture over the board */

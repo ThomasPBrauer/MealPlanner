@@ -27,6 +27,8 @@ model UserPreference {
   colorGold      String   @default("#E8B04B")
   colorTomato    String   @default("#C1502E")
   colorChalk     String   @default("#F3EFE3")
+  colorPattern   String   @default("#F3EFE3") // tint of the background pattern
+  backgroundPattern String @default("none") // "none" | "gingham" | "checkerboard" | ... (lib/patterns.ts)
   themeName      String?  // name of the theme these fonts/colors started from; null = none picked
   visibleNutrients String @default("calories") // comma-separated NutritionKey list, e.g. "calories,protein,fat"
   hideCheckedItems Boolean @default(false) // shopping list: hide checked items instead of showing them struck through
@@ -161,6 +163,8 @@ model Theme {
   colorGold   String
   colorTomato String
   colorChalk  String
+  colorPattern String @default("#F3EFE3")
+  pattern     String   @default("none")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

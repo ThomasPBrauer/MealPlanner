@@ -1,4 +1,5 @@
 import { BUILT_IN_KEYS, ThemeData, ThemeSummary, themeNameKey } from "./themes";
+import { PatternKey, isPatternKey } from "./patterns";
 import type { BodyFontKey, DisplayFontKey } from "./types";
 
 // The rules for saving a shared theme, kept apart from Prisma: the caller
@@ -19,6 +20,8 @@ export interface ThemeRow {
   colorGold: string;
   colorTomato: string;
   colorChalk: string;
+  colorPattern: string;
+  pattern: string;
 }
 
 export interface ThemeStoreOps {
@@ -48,6 +51,8 @@ function toValues(owner: { email: string; name: string | null }, name: string, d
     colorGold: data.colors.gold,
     colorTomato: data.colors.tomato,
     colorChalk: data.colors.chalk,
+    colorPattern: data.colors.pattern,
+    pattern: data.pattern,
   };
 }
 
@@ -109,6 +114,8 @@ export function rowToSummary(row: ThemeRow, viewerEmail: string): ThemeSummary {
       gold: row.colorGold,
       tomato: row.colorTomato,
       chalk: row.colorChalk,
+      pattern: row.colorPattern,
     },
+    pattern: (isPatternKey(row.pattern) ? row.pattern : "none") as PatternKey,
   };
 }
