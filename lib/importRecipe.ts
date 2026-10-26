@@ -369,11 +369,24 @@ const SECTION_HEADERS = {
 // "yields N servings" blurb
 const INGREDIENT_NOISE_RE = /^(\d+\/?\d*x|original recipe.*yields.*|jump to.*)$/i;
 
+/** A header line as the section patterns see it: markdown decoration
+ * ("## Ingredients", "**Ingredients:**") removed. */
+function headerText(line: string): string {
+  return line.replace(/^[#>\s]+/, "").replace(/[*_\s:]+$/g, "").replace(/^[*_]+/, "").trim();
+}
+
 function findSectionLineIndex(lines: string[], pattern: RegExp, from = 0): number {
   for (let i = from; i < lines.length; i++) {
-    if (pattern.test(lines[i])) return i;
+    if (pattern.test(headerText(lines[i]))) return i;
   }
   return -1;
+}
+
+/** Drops a leading list marker — "* ", "- ", "• ", "1. ", "2) " — so a
+ * pasted numbered or bulleted step isn't numbered a second time by the
+ * recipe page. A bare leading number ("30 minutes…") is left alone. */
+function stripListMarker(line: string): string {
+  return line.replace(/^(?:[*\-•–·▪●]|\d+[.)])\s+/, "").trim();
 }
 
 /** "Prep Time:", "Servings:", etc. — the label and its value are usually on
@@ -446,7 +459,10 @@ export function parseRecipeText(raw: string): ExtractResult {
     .filter((l) => l.length > 0);
   if (lines.length === 0) return { error: "Paste some recipe text first." };
 
-  const name = decodeEntities(lines[0]);
+  // a paste that starts straight at "Ingredients" has no title line —
+  // leave the name alone rather than naming the recipe "Ingredients"
+  const firstIsSection = Object.values(SECTION_HEADERS).some((re) => re.test(headerText(lines[0])));
+  const name = firstIsSection ? undefined : decodeEntities(lines[0]);
 
   const minutes =
     parseDurationToMinutes(findLabeledValue(lines, /^total time:?/i)) ??
@@ -472,7 +488,10 @@ export function parseRecipeText(raw: string): ExtractResult {
       : lines
           .slice(directionsStart + 1, nutritionStart === -1 ? undefined : nutritionStart)
           // drop bare step-number lines some sites paste on their own line ("1", "Step 1")
-          .filter((l) => !/^(step\s*)?\d+\.?$/i.test(l));
+          .filter((l) => !/^(step\s*)?\d+\.?$/i.test(l))
+          // and the "1." / "•" marker at the front of a step
+          .map(stripListMarker)
+          .filter(Boolean);
 
   const nutritionSection = nutritionStart === -1 ? trimmedRaw : lines.slice(nutritionStart).join("\n");
   const nutrition = {
