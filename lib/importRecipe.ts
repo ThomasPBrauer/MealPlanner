@@ -25,6 +25,18 @@ const FRACTION_MAP: Record<string, string> = {
   "⅚": "5/6", "⅛": "1/8", "⅜": "3/8", "⅝": "5/8", "⅞": "7/8",
 };
 
+/** Pasted and scraped text often carries characters you can't see: zero-width
+ * spaces, soft hyphens, byte-order marks, stray control characters (which
+ * some fonts draw as "0" or a box), and non-breaking or thin spaces. Any one
+ * of them inside "cups" stops it matching a unit, so they're removed (or,
+ * for the odd spaces, turned into plain spaces) before anything is parsed. */
+export function cleanPastedText(s: string): string {
+  return s
+    .replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, " ")
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufe00-\ufe0f\ufeff]/g, "");
+}
+
 function normalizeFractions(s: string): string {
   return (
     s
@@ -71,7 +83,7 @@ export interface SplitOptions {
  * name. Falls back to putting the whole line in `name` if it doesn't
  * recognize a leading quantity. */
 export function splitIngredientLine(raw: string, opts: SplitOptions = {}): Ingredient {
-  const line = normalizeFractions(decodeEntities(stripHtml(raw)))
+  const line = normalizeFractions(decodeEntities(stripHtml(cleanPastedText(raw))))
     .replace(/\s+/g, " ")
     .trim()
     .replace(BULLET_RE, "");
@@ -450,7 +462,7 @@ function findLabeledNutrient(text: string, label: string): number | undefined {
 }
 
 export function parseRecipeText(raw: string): ExtractResult {
-  const trimmedRaw = raw.trim();
+  const trimmedRaw = cleanPastedText(raw).trim();
   if (!trimmedRaw) return { error: "Paste some recipe text first." };
 
   const lines = trimmedRaw
