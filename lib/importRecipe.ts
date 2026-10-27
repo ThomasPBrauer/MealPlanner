@@ -371,8 +371,8 @@ export async function extractRecipeFromUrl(targetUrl: string): Promise<ExtractRe
 // ---------------------------------------------------------------------------
 
 const SECTION_HEADERS = {
-  ingredients: /^ingredients$/i,
-  directions: /^(directions|instructions|steps|method)$/i,
+  ingredients: /^ingredients?$/i,
+  directions: /^(directions?|instructions?|steps?|method|preparation|procedure)$/i,
   nutrition: /^nutrition facts/i,
 };
 
@@ -461,6 +461,65 @@ function findLabeledNutrient(text: string, label: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+// "Prep Time: 10 min", "Serves 4" and similar lines carry no ingredient or step
+const META_LINE_RE = /^(prep(?:aration)?|cook(?:ing)?|total|ready|servings?|serves|yield|makes|course|cuisine|author|calories)\b/i;
+
+/** For text with no "Ingredients" / "Directions" headings at all (a Word
+ * document someone typed up, a photographed card): sorts lines into
+ * ingredients (start with a quantity, or are short bullets) and steps
+ * (numbered, or sentence-length). Only used when neither heading exists. */
+function classifyHeaderless(lines: string[]): { ingredients: string[]; instructions: string[] } {
+  const ingredients: string[] = [];
+  const instructions: string[] = [];
+
+  for (const line of lines) {
+    const hasBullet = BULLET_RE.test(line);
+    const body = normalizeFractions(line).replace(BULLET_RE, "").trim();
+    if (!body || META_LINE_RE.test(body)) continue;
+
+    if (/^(?:step\s*)?\d+\s*[.)]\s+\S/i.test(body)) {
+      instructions.push(body);
+      continue;
+    }
+    // a sentence that happens to start with a number ("30 minutes in the oven, then cool.")
+    if (/[.!]$/.test(body) && body.split(/\s+/).length >= 6) {
+      instructions.push(body);
+      continue;
+    }
+    const q = leadingQuantity(body);
+    if (q && !/^[.)]/.test(q.after) && (matchLeadingUnit(q.after) || body.length <= 70)) {
+      ingredients.push(line);
+    } else if (hasBullet && body.length <= 70) {
+      ingredients.push(line);
+    } else if (body.length >= 25) {
+      instructions.push(body);
+    }
+  }
+  return { ingredients, instructions };
+}
+
+const STEP_MARKER_RE = /^(?:\d+[.)]|step\s*\d+[:.)]?)\s+/i;
+
+/** Joins lines that are really one step wrapped across lines. Text copied
+ * from a PDF, a Word file or an OCR'd photo breaks lines at the page width,
+ * so "…to help / prevent browning." would otherwise become two steps. When
+ * the steps are numbered, any line without a number continues the one before
+ * it; otherwise a line that starts in lowercase after one that didn't end a
+ * sentence is treated as a continuation. */
+function mergeWrappedSteps(lines: string[]): string[] {
+  const numbered = lines.filter((l) => STEP_MARKER_RE.test(l)).length >= 2;
+  const out: string[] = [];
+  for (const line of lines) {
+    const prev = out[out.length - 1];
+    const continues = numbered
+      ? !STEP_MARKER_RE.test(line) && prev !== undefined
+      : prev !== undefined && /^[a-z]/.test(line) && !/[.!?:;)"”]$/.test(prev);
+    if (continues) out[out.length - 1] = `${prev} ${line}`;
+    else out.push(line);
+  }
+  return out;
+}
+
 export function parseRecipeText(raw: string): ExtractResult {
   const trimmedRaw = cleanPastedText(raw).trim();
   if (!trimmedRaw) return { error: "Paste some recipe text first." };
@@ -479,14 +538,26 @@ export function parseRecipeText(raw: string): ExtractResult {
   const minutes =
     parseDurationToMinutes(findLabeledValue(lines, /^total time:?/i)) ??
     parseDurationToMinutes(findLabeledValue(lines, /^prep time:?/i));
-  const servings = parseServingsCount(findLabeledValue(lines, /^servings:?/i));
+  // "Prep Time: 15 min  Servings: 6" often arrives on one line, so the label
+  // isn't at the start — look for it anywhere before the ingredients list
+  const headerLines = lines.slice(0, Math.max(0, findSectionLineIndex(lines, SECTION_HEADERS.ingredients)) || lines.length);
+  const servings =
+    parseServingsCount(findLabeledValue(lines, /^servings:?/i)) ??
+    parseServingsCount(headerLines.join("\n").match(/\b(?:servings?|serves|yield)s?:?\s*(\d+)/i)?.[1] ?? null);
 
   const ingredientsStart = findSectionLineIndex(lines, SECTION_HEADERS.ingredients);
   const directionsStart = findSectionLineIndex(lines, SECTION_HEADERS.directions);
   const nutritionStart = findSectionLineIndex(lines, SECTION_HEADERS.nutrition);
 
-  const ingredients: Ingredient[] =
-    ingredientsStart === -1
+  // no headings anywhere → work out which lines are which
+  const headerless =
+    ingredientsStart === -1 && directionsStart === -1
+      ? classifyHeaderless(lines.slice(firstIsSection ? 0 : 1, nutritionStart === -1 ? undefined : nutritionStart))
+      : null;
+
+  const ingredients: Ingredient[] = headerless
+    ? headerless.ingredients.map((l, i) => ({ ...splitIngredientLine(l, { standardizeUnits: true }), id: `ing-${i}` }))
+    : ingredientsStart === -1
       ? []
       : mergeSplitIngredientLines(
           lines
@@ -494,16 +565,19 @@ export function parseRecipeText(raw: string): ExtractResult {
             .filter((l) => !INGREDIENT_NOISE_RE.test(l))
         ).map((l, i) => ({ ...splitIngredientLine(l, { standardizeUnits: true }), id: `ing-${i}` }));
 
-  const instructions: string[] =
-    directionsStart === -1
-      ? []
-      : lines
-          .slice(directionsStart + 1, nutritionStart === -1 ? undefined : nutritionStart)
-          // drop bare step-number lines some sites paste on their own line ("1", "Step 1")
-          .filter((l) => !/^(step\s*)?\d+\.?$/i.test(l))
-          // and the "1." / "•" marker at the front of a step
-          .map(stripListMarker)
-          .filter(Boolean);
+  const instructions: string[] = headerless
+    ? headerless.instructions.map(stripListMarker).filter(Boolean)
+    : mergeWrappedSteps(
+        directionsStart === -1
+          ? []
+          : lines
+              .slice(directionsStart + 1, nutritionStart === -1 ? undefined : nutritionStart)
+              // drop bare step-number lines some sites paste on their own line ("1", "Step 1")
+              .filter((l) => !/^(step\s*)?\d+\.?$/i.test(l))
+      )
+        // and the "1." / "•" marker at the front of a step
+        .map(stripListMarker)
+        .filter(Boolean);
 
   const nutritionSection = nutritionStart === -1 ? trimmedRaw : lines.slice(nutritionStart).join("\n");
   const nutrition = {

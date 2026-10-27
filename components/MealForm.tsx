@@ -11,6 +11,7 @@ import {
   PROTEIN_OPTIONS,
 } from "@/lib/types";
 import { DEPARTMENT_SUGGESTIONS, TAG_SUGGESTIONS, colorForTag } from "@/lib/data";
+import { FileImportError, extractTextFromFile } from "@/lib/fileImport";
 
 export interface MealFormValues {
   name: string;
@@ -120,7 +121,10 @@ export default function MealForm({
   const [availableMeals, setAvailableMeals] = useState<Meal[]>([]);
   const [componentToAdd, setComponentToAdd] = useState("");
 
-  const [importMode, setImportMode] = useState<"url" | "text">("url");
+  const [importMode, setImportMode] = useState<"url" | "text" | "file">("url");
+  const [importProgress, setImportProgress] = useState<string | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
   const [importUrl, setImportUrl] = useState("");
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
@@ -228,11 +232,7 @@ export default function MealForm({
     }
   }
 
-  async function handleImport() {
-    const pasted = importText.trim();
-    const urlValue = importUrl.trim();
-    if (importMode === "url" && !urlValue) return;
-    if (importMode === "text" && !pasted) return;
+  async function runImport(payload: { url?: string; text?: string }, sourceLabel?: string) {
     setImporting(true);
     setImportError(null);
     setImportedName(null);
@@ -240,7 +240,7 @@ export default function MealForm({
       const res = await fetch("/api/meals/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(importMode === "text" ? { text: pasted } : { url: urlValue }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -259,7 +259,9 @@ export default function MealForm({
       if (typeof data.servings === "number" && (!servings.trim() || servings === "4")) {
         setServings(String(data.servings));
       }
-      if (data.source && !source.trim()) setSource(data.source);
+      // pasted/extracted text has no address of its own — name the file instead
+      const importedSource = sourceLabel && data.source === "Pasted text" ? sourceLabel : data.source;
+      if (importedSource && !source.trim()) setSource(importedSource);
       if (data.nutrition) {
         setNutrition((prev) => {
           const next = { ...prev };
@@ -292,6 +294,48 @@ export default function MealForm({
     } finally {
       setImporting(false);
     }
+  }
+
+  async function handleImport() {
+    const pasted = importText.trim();
+    const urlValue = importUrl.trim();
+    if (importMode === "url" && !urlValue) return;
+    if (importMode === "text" && !pasted) return;
+    await runImport(importMode === "text" ? { text: pasted } : { url: urlValue });
+  }
+
+  // a dropped or chosen Word / PDF / image file: read its text here in the
+  // browser (see lib/fileImport.ts), then import it like pasted text
+  async function handleFile(file: File) {
+    setImportMode("file");
+    setImporting(true);
+    setImportError(null);
+    setImportedName(null);
+    let text: string;
+    let note: string | undefined;
+    try {
+      const result = await extractTextFromFile(file, setImportProgress);
+      text = result.text;
+      note = result.note;
+    } catch (err) {
+      setImportError(
+        err instanceof FileImportError ? err.message : "Couldn't read that file. Try a different one, or paste its text instead."
+      );
+      setImporting(false);
+      setImportProgress(null);
+      return;
+    }
+    setImportProgress("Pulling out the recipe…");
+    await runImport({ text }, `File: ${file.name}`);
+    setImportProgress(null);
+    if (note) setImportError(note);
+  }
+
+  function handleFileDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDraggingFile(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && !importing) handleFile(file);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -331,11 +375,26 @@ export default function MealForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-7">
-      <div className="rounded-md border border-gold/30 bg-gold/5 p-3">
+      <div
+        className={`rounded-md border p-3 transition-colors ${
+          isDraggingFile ? "border-gold bg-gold/15" : "border-gold/30 bg-gold/5"
+        }`}
+        // a file can be dropped anywhere on the import box, whichever tab is open
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("Files")) {
+            e.preventDefault();
+            setIsDraggingFile(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsDraggingFile(false);
+        }}
+        onDrop={handleFileDrop}
+      >
         <div className="mb-2 flex items-center justify-between">
           <p className="text-[12px] font-semibold text-gold">Import a recipe</p>
           <div className="flex items-center gap-1 rounded-full border border-gold/30 p-0.5 text-[10.5px]">
-            {(["url", "text"] as const).map((mode) => (
+            {(["url", "text", "file"] as const).map((mode) => (
               <button
                 key={mode}
                 type="button"
@@ -347,7 +406,7 @@ export default function MealForm({
                   importMode === mode ? "bg-gold text-ink" : "text-sage/80 hover:text-chalk"
                 }`}
               >
-                {mode === "url" ? "From URL" : "Paste text"}
+                {mode === "url" ? "From URL" : mode === "text" ? "Paste text" : "From file"}
               </button>
             ))}
           </div>
@@ -370,6 +429,31 @@ export default function MealForm({
             >
               {importing ? "Importing…" : "Import"}
             </button>
+          </div>
+        ) : importMode === "file" ? (
+          <div>
+            <button
+              type="button"
+              onClick={() => importFileRef.current?.click()}
+              disabled={importing}
+              className="flex w-full flex-col items-center gap-1 rounded-md border border-dashed border-gold/50 px-3 py-5 text-center text-[12px] text-chalk transition-colors hover:border-gold disabled:opacity-60"
+            >
+              <span className="font-semibold text-gold">
+                {importing ? importProgress ?? "Working…" : "Drop a recipe file here, or click to choose"}
+              </span>
+              {!importing && <span className="text-[10.5px] text-sage/70">Word (.docx), PDF, or a photo / screenshot (PNG, JPG)</span>}
+            </button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".docx,.pdf,image/png,image/jpeg,image/webp,image/gif,image/bmp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = ""; // so choosing the same file again still fires
+                if (file) handleFile(file);
+              }}
+            />
           </div>
         ) : (
           <div className="space-y-2">
@@ -400,6 +484,8 @@ export default function MealForm({
         <p className="mt-2 text-[10.5px] text-sage/60">
           {importMode === "url"
             ? "Works on pages that publish standard recipe markup (most WordPress food blogs and major recipe sites do). If a site blocks automated fetches, switch to \"Paste text\" and copy the page yourself instead."
+            : importMode === "file"
+            ? "The file is read on your device and never uploaded. Photos and scanned PDFs are read with text recognition, so check numbers and fractions carefully."
             : "Open the recipe in your browser, select all the text on the page (or just the recipe portion), copy, and paste it here."}{" "}
           {initial
             ? "Only fills in fields that are still empty (or at their default) — it won't overwrite anything you've already entered."
