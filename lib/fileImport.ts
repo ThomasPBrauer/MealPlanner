@@ -15,13 +15,15 @@
 //   scanned PDF / image  tesseract.js OCR (first use downloads ~10 MB of
 //                        engine + English data, then it's cached)
 
+import { LayoutItem, layoutPage, stripPageFurniture } from "./pdfLayout";
+
 export type ImportFileKind = "docx" | "pdf" | "image";
 
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 /** OCR is slow (several seconds a page), so a scanned PDF is read only up to
  * this many pages — plenty for a recipe, and it stops a whole cookbook from
  * tying up the browser. */
-export const MAX_OCR_PAGES = 6;
+export const MAX_OCR_PAGES = 10;
 /** A PDF with fewer characters per page than this is treated as a scan. */
 const MIN_CHARS_PER_PAGE = 40;
 
@@ -178,13 +180,17 @@ async function extractPdf(file: File, onProgress: Progress): Promise<FileImportR
     throw new FileImportError("Couldn't read that PDF. It may be damaged.");
   }
 
-  const pageLines: string[] = [];
+  const pages: string[][] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    pageLines.push(...itemsToLines(content.items as unknown as PdfTextItem[]));
+    // column-aware reading order (ingredients down one side, directions down
+    // the other), one page at a time
+    pages.push(layoutPage(content.items as unknown as LayoutItem[]));
   }
-  const text = pageLines.join("\n");
+  // drop running headers / footers / page numbers, then run the pages together:
+  // a step that wraps from one page onto the next is stitched back up by the parser
+  const text = stripPageFurniture(pages).flat().join("\n");
 
   if (!looksScanned(text, pdf.numPages)) return { text, method: "pdf-text" };
 
@@ -228,8 +234,8 @@ export function repairOcrText(text: string): string {
       let l = line.trim();
       // step number read with a comma/semicolon: "2, Mix" → "2. Mix"
       l = l.replace(/^(\d{1,2})[,;]\s+(?=\S)/, "$1. ");
-      // ½ read as ¥ or Y: "¥ cup flour"
-      l = l.replace(new RegExp(`^[¥Y]\\s+(?=${OCR_UNIT}\\b)`), "½ ");
+      // ½ read as ¥, Y, "¥6", "Vs" or "V2": "¥ cup flour"
+      l = l.replace(new RegExp(`^(?:¥6?|Y|Vs|V2)\\s+(?=${OCR_UNIT}\\b)`), "½ ");
       // a mixed number's ½ read as %: "1% teaspoons" → "1½ teaspoons"
       l = l.replace(new RegExp(`(\\d)\\s*[%¥]\\s+(?=${OCR_UNIT}\\b)`, "g"), "$1½ ");
       // "1" read as l, I or |: "l cup milk"
@@ -286,13 +292,17 @@ async function runOcr(canvases: HTMLCanvasElement[], onProgress: Progress): Prom
     },
   });
   try {
-    const parts: string[] = [];
+    // "3" = fully automatic page segmentation, which finds columns and reads
+    // them one after another. (A single-block mode would read straight across
+    // the page and interleave the columns.)
+    await worker.setParameters({ tessedit_pageseg_mode: "3" });
+    const pages: string[][] = [];
     for (const canvas of canvases) {
       const { data } = await worker.recognize(canvas);
-      parts.push(data.text);
+      pages.push(data.text.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean));
       pageNo++;
     }
-    const text = repairOcrText(parts.join("\n"));
+    const text = repairOcrText(stripPageFurniture(pages).flat().join("\n"));
     if (!text.replace(/\s+/g, "")) {
       throw new FileImportError("Couldn't find any text in that file. Try a clearer or higher-resolution copy.");
     }

@@ -498,6 +498,37 @@ function classifyHeaderless(lines: string[]): { ingredients: string[]; instructi
   return { ingredients, instructions };
 }
 
+// words that leave an ingredient line hanging, so the next line must be its
+// continuation ("3 Honeycrisp apples, cored and" / "diced")
+const DANGLING_END_RE = /(?:[,;(]|\b(?:and|or|with|for|of|to|in|into|plus|cut|then|such|as))$/i;
+// a line that is nothing but a preparation note — on its own it can't be an
+// ingredient, so it belongs to the line above ("diced", "divided", "to taste")
+const PREP_NOTE_RE =
+  /^(?:(?:finely|roughly|coarsely|thinly|freshly|lightly)\s+)?(?:diced|chopped|minced|sliced|divided|optional|softened|melted|beaten|drained|rinsed|peeled|grated|shredded|crushed|halved|cubed|toasted|packed|sifted|trimmed|thawed|cooked|room temperature|at room temperature|to taste|for serving|for garnish|or more|or less|plus more[\w\s]*)(?:[\s,]+(?:and|or|diced|chopped|minced|sliced|divided|optional|to taste|for serving|for garnish))*[.,)]*$/i;
+
+/** Rejoins an ingredient that was wrapped onto a second line — common when the
+ * recipe sat in a narrow column of a PDF, Word file or photo. Conservative:
+ * a line is only treated as a continuation when it has no quantity of its own
+ * and either the line above ends mid-phrase or it is purely a prep note. */
+function mergeWrappedIngredients(lines: string[]): string[] {
+  const out: string[] = [];
+  for (const line of lines) {
+    const prev = out[out.length - 1];
+    const body = normalizeFractions(line).replace(BULLET_RE, "").trim();
+    const hasOwnQuantity = leadingQuantity(body) !== null;
+    const prevHasQuantity = prev !== undefined && leadingQuantity(normalizeFractions(prev).replace(BULLET_RE, "").trim()) !== null;
+    const continues =
+      prev !== undefined &&
+      prevHasQuantity &&
+      !hasOwnQuantity &&
+      /^[a-z(]/.test(body) &&
+      (DANGLING_END_RE.test(prev.trim()) || PREP_NOTE_RE.test(body));
+    if (continues) out[out.length - 1] = `${prev} ${line.replace(BULLET_RE, "").trim()}`;
+    else out.push(line);
+  }
+  return out;
+}
+
 const STEP_MARKER_RE = /^(?:\d+[.)]|step\s*\d+[:.)]?)\s+/i;
 
 /** Joins lines that are really one step wrapped across lines. Text copied
@@ -549,6 +580,14 @@ export function parseRecipeText(raw: string): ExtractResult {
   const directionsStart = findSectionLineIndex(lines, SECTION_HEADERS.directions);
   const nutritionStart = findSectionLineIndex(lines, SECTION_HEADERS.nutrition);
 
+  // each section runs to whichever heading comes next — not necessarily the
+  // one it "should" (a two-column layout can put Directions before Ingredients)
+  const headingStarts = [ingredientsStart, directionsStart, nutritionStart].filter((i) => i !== -1);
+  const sectionEnd = (start: number): number | undefined => {
+    const later = headingStarts.filter((i) => i > start);
+    return later.length ? Math.min(...later) : undefined;
+  };
+
   // no headings anywhere → work out which lines are which
   const headerless =
     ingredientsStart === -1 && directionsStart === -1
@@ -559,10 +598,12 @@ export function parseRecipeText(raw: string): ExtractResult {
     ? headerless.ingredients.map((l, i) => ({ ...splitIngredientLine(l, { standardizeUnits: true }), id: `ing-${i}` }))
     : ingredientsStart === -1
       ? []
-      : mergeSplitIngredientLines(
-          lines
-            .slice(ingredientsStart + 1, directionsStart === -1 ? undefined : directionsStart)
-            .filter((l) => !INGREDIENT_NOISE_RE.test(l))
+      : mergeWrappedIngredients(
+          mergeSplitIngredientLines(
+            lines
+              .slice(ingredientsStart + 1, sectionEnd(ingredientsStart))
+              .filter((l) => !INGREDIENT_NOISE_RE.test(l))
+          )
         ).map((l, i) => ({ ...splitIngredientLine(l, { standardizeUnits: true }), id: `ing-${i}` }));
 
   const instructions: string[] = headerless
@@ -571,7 +612,7 @@ export function parseRecipeText(raw: string): ExtractResult {
         directionsStart === -1
           ? []
           : lines
-              .slice(directionsStart + 1, nutritionStart === -1 ? undefined : nutritionStart)
+              .slice(directionsStart + 1, sectionEnd(directionsStart))
               // drop bare step-number lines some sites paste on their own line ("1", "Step 1")
               .filter((l) => !/^(step\s*)?\d+\.?$/i.test(l))
       )
