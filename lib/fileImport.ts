@@ -277,7 +277,7 @@ async function extractImage(file: File, onProgress: Progress): Promise<FileImpor
 
 async function runOcr(canvases: HTMLCanvasElement[], onProgress: Progress): Promise<string> {
   onProgress("Loading the text reader (first time only — about 10 MB)…");
-  const { createWorker } = await import("tesseract.js");
+  const { createWorker, PSM } = await import("tesseract.js");
   let pageNo = 1;
   const worker = await createWorker("eng", 1, {
     logger: (m: { status: string; progress: number }) => {
@@ -295,7 +295,7 @@ async function runOcr(canvases: HTMLCanvasElement[], onProgress: Progress): Prom
     // "3" = fully automatic page segmentation, which finds columns and reads
     // them one after another. (A single-block mode would read straight across
     // the page and interleave the columns.)
-    await worker.setParameters({ tessedit_pageseg_mode: "3" });
+    await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO });
     const pages: string[][] = [];
     for (const canvas of canvases) {
       const { data } = await worker.recognize(canvas);
