@@ -1,5 +1,6 @@
 import { Ingredient } from "./types";
 import { isUnitOnly, matchLeadingUnit } from "./units";
+import { moveDescriptorsAfter } from "./ingredientNames";
 
 export interface ExtractedRecipe {
   name?: string;
@@ -76,6 +77,9 @@ export interface SplitOptions {
   /** Store the unit in its canonical form ("Cups" -> "C"). Off by default so
    * callers that just want the text split keep the unit as written. */
   standardizeUnits?: boolean;
+  /** Put preparation after the ingredient: "thinly sliced onion" becomes
+   * "onion, thinly sliced". Off by default; recipe imports turn it on. */
+  moveDescriptors?: boolean;
 }
 
 /** Best-effort split of a free-text ingredient line ("2 1/2 cups flour",
@@ -83,6 +87,11 @@ export interface SplitOptions {
  * name. Falls back to putting the whole line in `name` if it doesn't
  * recognize a leading quantity. */
 export function splitIngredientLine(raw: string, opts: SplitOptions = {}): Ingredient {
+  const ing = splitIngredientLineAsWritten(raw, opts);
+  return opts.moveDescriptors ? { ...ing, name: moveDescriptorsAfter(ing.name) } : ing;
+}
+
+function splitIngredientLineAsWritten(raw: string, opts: SplitOptions): Ingredient {
   const line = normalizeFractions(decodeEntities(stripHtml(cleanPastedText(raw))))
     .replace(/\s+/g, " ")
     .trim()
@@ -321,7 +330,7 @@ export async function extractRecipeFromUrl(targetUrl: string): Promise<ExtractRe
       : [];
   const ingredients = rawIngredients
     .filter((s) => typeof s === "string" && s.trim())
-    .map((s, i) => ({ ...splitIngredientLine(s, { standardizeUnits: true }), id: `ing-${i}` }));
+    .map((s, i) => ({ ...splitIngredientLine(s, { standardizeUnits: true, moveDescriptors: true }), id: `ing-${i}` }));
 
   const instructions = extractInstructionSteps(r.recipeInstructions);
 
@@ -595,7 +604,7 @@ export function parseRecipeText(raw: string): ExtractResult {
       : null;
 
   const ingredients: Ingredient[] = headerless
-    ? headerless.ingredients.map((l, i) => ({ ...splitIngredientLine(l, { standardizeUnits: true }), id: `ing-${i}` }))
+    ? headerless.ingredients.map((l, i) => ({ ...splitIngredientLine(l, { standardizeUnits: true, moveDescriptors: true }), id: `ing-${i}` }))
     : ingredientsStart === -1
       ? []
       : mergeWrappedIngredients(
@@ -604,7 +613,7 @@ export function parseRecipeText(raw: string): ExtractResult {
               .slice(ingredientsStart + 1, sectionEnd(ingredientsStart))
               .filter((l) => !INGREDIENT_NOISE_RE.test(l))
           )
-        ).map((l, i) => ({ ...splitIngredientLine(l, { standardizeUnits: true }), id: `ing-${i}` }));
+        ).map((l, i) => ({ ...splitIngredientLine(l, { standardizeUnits: true, moveDescriptors: true }), id: `ing-${i}` }));
 
   const instructions: string[] = headerless
     ? headerless.instructions.map(stripListMarker).filter(Boolean)
