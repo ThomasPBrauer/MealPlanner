@@ -180,7 +180,7 @@ export default function Pantry({
   return (
     <section
       ref={setNodeRef}
-      className={`chalk-texture flex h-[75vh] min-h-[420px] flex-col rounded-xl bg-board p-3 transition-colors sm:p-5 lg:h-full lg:min-h-0 ${
+      className={`chalk-texture flex h-[75vh] min-h-[480px] flex-col rounded-xl bg-board p-3 transition-colors sm:p-5 lg:h-full lg:min-h-0 ${
         isOver ? "chalk-drop-target" : ""
       }`}
     >
@@ -216,7 +216,7 @@ export default function Pantry({
           setOffError(null);
         }}
         placeholder="Search recipes…"
-        className="mt-4 rounded-md border border-white/10 bg-board-panel px-3 py-2 text-[13px] text-chalk placeholder:text-sage/50 outline-none focus:border-gold/60"
+        className="mt-2 rounded-md border border-white/10 bg-board-panel px-3 py-1.5 sm:mt-4 sm:py-2 text-[13px] text-chalk placeholder:text-sage/50 outline-none focus:border-gold/60"
       />
 
       <div className="mt-2 flex items-center justify-between gap-2">
@@ -232,7 +232,7 @@ export default function Pantry({
       </div>
 
       {tags.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <div className="mt-2 flex max-h-[4.5rem] flex-wrap items-center gap-1.5 overflow-y-auto pr-1 sm:mt-3 sm:max-h-28">
           <button
             onClick={() => setActiveTags([])}
             className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
@@ -286,7 +286,7 @@ export default function Pantry({
         </div>
       )}
 
-      <div className="mt-3 flex items-center gap-1.5">
+      <div className="mt-2 flex items-center gap-1.5 sm:mt-3">
         <label className="text-[10.5px] text-sage/70">Sort</label>
         <select
           value={sortKey}
