@@ -175,6 +175,7 @@ export default function Pantry({
 
   // dropping a board-origin card here removes it from the week — resolved
   // by the top-level DndContext's onDragEnd, this just marks the zone
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { setNodeRef, isOver } = useDroppable({ id: "pantry" });
 
   return (
@@ -209,6 +210,22 @@ export default function Pantry({
         </div>
       </div>
 
+      <button
+        type="button"
+        onClick={() => setFiltersOpen((o) => !o)}
+        aria-expanded={filtersOpen}
+        className="mt-2 flex items-center justify-between rounded-md border border-white/10 px-3 py-1.5 text-[12px] text-sage/90 transition-colors hover:border-gold/60 hover:text-gold lg:hidden"
+      >
+        <span>
+          Search, tags &amp; sort
+          {query.trim() || activeTags.length > 0
+            ? ` · ${[query.trim() ? "search" : "", activeTags.length ? `${activeTags.length} tag${activeTags.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(", ")}`
+            : ""}
+        </span>
+        <span aria-hidden>{filtersOpen ? "▴" : "▾"}</span>
+      </button>
+
+      <div className={`${filtersOpen ? "block" : "hidden"} lg:block`}>
       <input
         value={query}
         onChange={(e) => {
@@ -329,6 +346,7 @@ export default function Pantry({
             ↓
           </button>
         </div>
+      </div>
       </div>
 
       <div className="mt-3 max-h-[70vh] min-h-[240px] flex-1 space-y-3 overflow-auto pr-1 pt-2 lg:max-h-none lg:min-h-0">
