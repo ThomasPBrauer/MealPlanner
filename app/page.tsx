@@ -6,11 +6,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   DndContext,
+  CollisionDetection,
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
   KeyboardSensor,
   MouseSensor,
+  pointerWithin,
+  rectIntersection,
   TouchSensor,
   useSensor,
   useSensors,
@@ -50,6 +53,14 @@ function buildWeekPlan(entries: PlanEntry[], meals: Meal[]): WeekPlan {
 function makeTempId(mealId: string) {
   return `temp-${mealId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
+
+// Pick the slot under the pointer. The default (rect overlap) favours whichever
+// slot the wide drag card overlaps most — on a narrow screen that is always the
+// middle column, so Breakfast/Dinner couldn't be dropped on.
+const collisionDetection: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length > 0 ? hits : rectIntersection(args);
+};
 
 function BoardContent() {
   const { data: session } = useSession();
@@ -349,8 +360,8 @@ function BoardContent() {
   }
 
   return (
-    <main className="min-h-screen bg-board p-4 md:p-6">
-      <div className="mx-auto mb-3 flex max-w-[1400px] items-center justify-between px-1">
+    <main className="min-h-screen bg-board p-2 sm:p-4 md:p-6">
+      <div className="mx-auto mb-2 flex max-w-[1400px] items-center justify-between px-1 md:mb-3">
         <p className="text-[12px] text-sage/80">
           Signed in as{" "}
           <span className="text-chalk">{session?.user?.email ?? session?.user?.name}</span>
@@ -372,11 +383,12 @@ function BoardContent() {
       </div>
       <DndContext
         sensors={sensors}
+        collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveDrag(null)}
       >
-        <div className="mx-auto grid h-[calc(100vh-6rem)] max-w-[1400px] grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
+        <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-3 lg:h-[calc(100vh-6rem)] lg:grid-cols-[1fr_360px] lg:gap-4">
           {weekStart ? (
             <WeekCalendar
               plan={plan}

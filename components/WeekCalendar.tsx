@@ -108,13 +108,13 @@ export default function WeekCalendar({
   );
 
   return (
-    <section className="chalk-texture flex h-full min-h-0 flex-col rounded-xl bg-board p-5">
-      <header className="mb-3 flex flex-wrap items-end justify-between gap-3">
+    <section className="chalk-texture flex flex-col rounded-xl bg-board p-3 sm:p-5 lg:h-full lg:min-h-0">
+      <header className="mb-2 flex flex-wrap items-end justify-between gap-x-3 gap-y-1 sm:mb-3">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-sage">
             {loading ? "Loading…" : `${plannedCount} meal${plannedCount === 1 ? "" : "s"} planned`}
           </p>
-          <h1 className="font-display text-4xl leading-none text-chalk">
+          <h1 className="font-display text-2xl leading-none text-chalk sm:text-4xl">
             The Menu Board
           </h1>
         </div>
@@ -145,7 +145,7 @@ export default function WeekCalendar({
       </header>
 
       {/* week navigation */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/10 bg-board-panel/60 px-3 py-2">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-md border border-white/10 bg-board-panel/60 px-2 py-1 sm:mb-4 sm:px-3 sm:py-2">
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => onNavigate("prev")}
@@ -169,7 +169,7 @@ export default function WeekCalendar({
           </button>
         </div>
 
-        <p className="font-display text-xl leading-none text-chalk">
+        <p className="font-display text-lg leading-none text-chalk sm:text-xl">
           {formatWeekRange(weekStart)}
         </p>
 
@@ -191,7 +191,7 @@ export default function WeekCalendar({
         className={`transition-opacity ${loading ? "pointer-events-none opacity-50" : ""} flex flex-1 min-h-0`}
       >
         {orientation === "daysTop" ? (
-          <div className="grid flex-1 grid-cols-[44px_repeat(7,1fr)] gap-1.5 overflow-auto pr-1">
+          <div className="grid flex-1 grid-cols-[22px_repeat(7,minmax(0,1fr))] gap-1 overflow-auto sm:grid-cols-[44px_repeat(7,minmax(0,1fr))] sm:gap-1.5 sm:pr-1">
             {/* header row: days across the top */}
             <div />
             {days.map((d) => {
@@ -201,9 +201,9 @@ export default function WeekCalendar({
               return (
                 <div
                   key={iso}
-                  className="sticky top-0 z-10 bg-board pb-1 text-center"
+                  className="sticky top-0 z-10 bg-board pb-0.5 text-center"
                 >
-                  <p className="font-display text-2xl leading-none text-gold">
+                  <p className="font-display text-base leading-none text-gold sm:text-2xl">
                     {weekday}
                   </p>
                   <p
@@ -224,7 +224,7 @@ export default function WeekCalendar({
               <div key={mt.key} className="contents">
                 <div className="flex items-center justify-center">
                   <p
-                    className="font-display text-lg text-sage"
+                    className="font-display text-sm text-sage sm:text-lg"
                     style={{
                       writingMode: "vertical-rl",
                       transform: "rotate(180deg)",
@@ -281,10 +281,10 @@ export default function WeekCalendar({
           </div>
         ) : (
           <div
-            className={`grid flex-1 gap-1.5 overflow-auto pr-1 ${
+            className={`grid flex-1 gap-1 overflow-auto sm:gap-1.5 sm:pr-1 ${
               visibleNutrients.length > 0
-                ? "grid-cols-[56px_repeat(3,1fr)_92px]"
-                : "grid-cols-[56px_repeat(3,1fr)]"
+                ? "grid-cols-[34px_repeat(3,minmax(0,1fr))_64px] sm:grid-cols-[56px_repeat(3,minmax(0,1fr))_92px]"
+                : "grid-cols-[34px_repeat(3,minmax(0,1fr))] sm:grid-cols-[56px_repeat(3,minmax(0,1fr))]"
             }`}
           >
             {/* header row: meal types across the top */}
@@ -292,15 +292,15 @@ export default function WeekCalendar({
             {MEAL_TYPES.map((mt) => (
               <div
                 key={mt.key}
-                className="sticky top-0 z-10 bg-board pb-1 text-center"
+                className="sticky top-0 z-10 bg-board pb-0.5 text-center"
               >
-                <p className="font-display text-2xl leading-none text-gold">
+                <p className="font-display text-base leading-none text-gold sm:text-2xl">
                   {mt.label}
                 </p>
               </div>
             ))}
             {visibleNutrients.length > 0 && (
-              <div className="sticky top-0 z-10 bg-board pb-1 text-center">
+              <div className="sticky top-0 z-10 bg-board pb-0.5 text-center">
                 <p className="text-[10px] uppercase tracking-wide text-sage/70">
                   Total
                 </p>
@@ -315,7 +315,7 @@ export default function WeekCalendar({
               return (
                 <div key={iso} className="contents">
                   <div className="flex flex-col items-center justify-center gap-0.5">
-                    <p className="font-display text-lg text-chalk">{weekday}</p>
+                    <p className="font-display text-sm text-chalk sm:text-lg">{weekday}</p>
                     <p
                       className={`text-[10px] ${
                         isToday

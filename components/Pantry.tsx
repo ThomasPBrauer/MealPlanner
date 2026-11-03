@@ -180,7 +180,7 @@ export default function Pantry({
   return (
     <section
       ref={setNodeRef}
-      className={`chalk-texture flex h-full min-h-0 flex-col rounded-xl bg-board p-5 transition-colors ${
+      className={`chalk-texture flex h-[75vh] min-h-[420px] flex-col rounded-xl bg-board p-3 transition-colors sm:p-5 lg:h-full lg:min-h-0 ${
         isOver ? "chalk-drop-target" : ""
       }`}
     >

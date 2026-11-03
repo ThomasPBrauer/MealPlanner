@@ -63,7 +63,7 @@ export default function DaySlot({
   return (
     <div
       ref={setNodeRef}
-      className={`group/slot flex max-h-[220px] min-h-[92px] flex-col gap-1.5 overflow-y-auto rounded-md border border-white/5 bg-board-rail/40 p-1.5 transition-colors ${
+      className={`group/slot flex max-h-[220px] min-h-[64px] sm:min-h-[92px] flex-col gap-1.5 overflow-y-auto rounded-md border border-white/5 bg-board-rail/40 p-1.5 transition-colors ${
         isOver ? "chalk-drop-target" : ""
       }`}
     >
