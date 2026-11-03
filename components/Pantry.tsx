@@ -214,7 +214,7 @@ export default function Pantry({
         type="button"
         onClick={() => setFiltersOpen((o) => !o)}
         aria-expanded={filtersOpen}
-        className="mt-2 flex items-center justify-between rounded-md border border-white/10 px-3 py-1.5 text-[12px] text-sage/90 transition-colors hover:border-gold/60 hover:text-gold lg:hidden"
+        className="mt-2 flex items-center justify-between rounded-md border border-white/10 px-3 py-1.5 text-[12px] text-sage/90 transition-colors hover:border-gold/60 hover:text-gold pantry-filter-toggle"
       >
         <span>
           Search, tags &amp; sort
@@ -225,7 +225,7 @@ export default function Pantry({
         <span aria-hidden>{filtersOpen ? "▴" : "▾"}</span>
       </button>
 
-      <div className={`${filtersOpen ? "block" : "hidden"} lg:block`}>
+      <div className={`pantry-filters ${filtersOpen ? "" : "hidden"}`}>
       <input
         value={query}
         onChange={(e) => {

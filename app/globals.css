@@ -109,3 +109,12 @@ body,
   border-radius: 8px;
   border: 2px solid rgb(var(--color-board-rgb));
 }
+
+/* Pantry filters collapse behind a toggle unless there is room for them:
+   i.e. on narrow screens AND on short ones (a phone/tablet in landscape,
+   which can be wide enough for the side-by-side layout but is very short). */
+.pantry-filter-toggle { display: flex; }
+@media (min-width: 1024px) and (min-height: 700px) {
+  .pantry-filter-toggle { display: none; }
+  .pantry-filters { display: block !important; }
+}
