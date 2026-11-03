@@ -180,7 +180,7 @@ export default function Pantry({
   return (
     <section
       ref={setNodeRef}
-      className={`chalk-texture flex h-[75vh] min-h-[480px] flex-col rounded-xl bg-board p-3 transition-colors sm:p-5 lg:h-full lg:min-h-0 ${
+      className={`chalk-texture flex flex-col rounded-xl bg-board p-3 transition-colors sm:p-5 lg:h-full lg:min-h-0 ${
         isOver ? "chalk-drop-target" : ""
       }`}
     >
@@ -331,7 +331,7 @@ export default function Pantry({
         </div>
       </div>
 
-      <div className="mt-3 min-h-0 flex-1 space-y-3 overflow-auto pr-1 pt-2">
+      <div className="mt-3 max-h-[70vh] min-h-[240px] flex-1 space-y-3 overflow-auto pr-1 pt-2 lg:max-h-none lg:min-h-0">
         {visibleOffResults.length > 0 && (
           <div className="space-y-2 rounded-md border border-gold/25 bg-gold/5 p-2">
             <p className="text-[10.5px] uppercase tracking-[0.15em] text-gold/80">
