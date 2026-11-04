@@ -422,7 +422,9 @@ function BoardContent() {
           />
         </div>
 
-        <DragOverlay>
+        {/* no drop animation: it flies the card back to where it was picked up
+            (the pantry), but a drop onto the board puts a copy in its slot */}
+        <DragOverlay dropAnimation={null}>
           {activeDrag ? (
             <div
               className="rounded-md bg-paper px-3 py-2 text-ink shadow-card"

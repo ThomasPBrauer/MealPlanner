@@ -1,7 +1,6 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 import { Meal, NutritionKey, PlacedMeal } from "@/lib/types";
 import MealCard from "./MealCard";
 import { DragPayload } from "./DaySlot";
@@ -28,7 +27,7 @@ export default function DraggableMealCard({
   visibleNutrients,
   onRemove,
 }: DraggableMealCardProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: dragId,
     data: payload,
   });
@@ -36,7 +35,6 @@ export default function DraggableMealCard({
   return (
     <div
       ref={setNodeRef}
-      style={transform ? { transform: CSS.Translate.toString(transform) } : undefined}
       {...listeners}
       {...attributes}
       className={isDragging ? "opacity-30" : ""}
