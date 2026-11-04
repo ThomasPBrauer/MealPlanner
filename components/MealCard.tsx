@@ -134,7 +134,7 @@ export default function MealCard({
                 </svg>
               </Link>
             )}
-            {isBrowse && (
+            {!isPlaced && (
               <span className="shrink-0 whitespace-nowrap text-[10.5px] text-ink/45">
                 {ownershipLabel}
               </span>
@@ -143,7 +143,7 @@ export default function MealCard({
 
           <div
             className={`mt-1 flex min-w-0 items-center gap-x-1.5 gap-y-0.5 text-ink/55 ${
-              isBrowse ? "flex-wrap" : ""
+              !isPlaced ? "flex-wrap" : ""
             } ${isPlaced ? "text-[10px]" : "text-[11.5px]"}`}
           >
             <span
@@ -155,7 +155,7 @@ export default function MealCard({
             </span>
             <span aria-hidden className="shrink-0">·</span>
             <span className="shrink-0">{meal.minutes} min</span>
-            {isBrowse && (
+            {!isPlaced && (
               <>
                 <span aria-hidden className="shrink-0">·</span>
                 <span className="shrink-0">

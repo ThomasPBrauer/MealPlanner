@@ -65,6 +65,7 @@ interface PantryUiState {
   tagMode: TagMode;
   sortKey: PantrySortKey;
   sortDir: 1 | -1;
+  ownerFilter?: "all" | "mine" | "public";
 }
 
 export default function Pantry({
@@ -76,7 +77,7 @@ export default function Pantry({
   onToggleManage,
 }: PantryProps) {
   const [query, setQuery] = useState("");
-  const [ownerFilter, setOwnerFilter] = useState<"all" | "mine" | "public">("all");
+  const [ownerFilter, setOwnerFilter] = useState<"all" | "mine" | "public">("mine");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [tagMode, setTagMode] = useState<TagMode>("or");
   const [sortKey, setSortKey] = useState<PantrySortKey>("name");
@@ -105,6 +106,7 @@ export default function Pantry({
         if (saved.tagMode === "and" || saved.tagMode === "or") setTagMode(saved.tagMode);
         if (typeof saved.sortKey === "string") setSortKey(saved.sortKey as PantrySortKey);
         if (saved.sortDir === 1 || saved.sortDir === -1) setSortDir(saved.sortDir);
+        if (saved.ownerFilter === "all" || saved.ownerFilter === "mine" || saved.ownerFilter === "public") setOwnerFilter(saved.ownerFilter);
       }
     } catch {
       /* corrupt or inaccessible storage — just fall back to defaults */
@@ -116,12 +118,12 @@ export default function Pantry({
   useEffect(() => {
     if (!hydrated) return;
     try {
-      const state: PantryUiState = { query, activeTags, tagMode, sortKey, sortDir };
+      const state: PantryUiState = { query, activeTags, tagMode, sortKey, sortDir, ownerFilter };
       sessionStorage.setItem(PANTRY_UI_STORAGE_KEY, JSON.stringify(state));
     } catch {
       /* storage unavailable/full — filters just won't persist this time */
     }
-  }, [hydrated, query, activeTags, tagMode, sortKey, sortDir]);
+  }, [hydrated, query, activeTags, tagMode, sortKey, sortDir, ownerFilter]);
 
   const tags = useMemo(
     () => Array.from(new Set(meals.flatMap((m) => m.tags))).sort(),
@@ -144,7 +146,7 @@ export default function Pantry({
           ? activeTags.every((t) => m.tags.includes(t))
           : activeTags.some((t) => m.tags.includes(t));
       const matchesOwner =
-        !managing || ownerFilter === "all"
+        ownerFilter === "all"
           ? true
           : ownerFilter === "mine"
           ? !!m.isMine
@@ -152,7 +154,7 @@ export default function Pantry({
       return matchesQuery && matchesTags && matchesOwner;
     });
     return result.sort((a, b) => compareMeals(a, b, sortKey, sortDir));
-  }, [meals, query, activeTags, tagMode, sortKey, sortDir, managing, ownerFilter]);
+  }, [meals, query, activeTags, tagMode, sortKey, sortDir, ownerFilter]);
 
   async function handleOffSearch() {
     const q = query.trim();
@@ -237,10 +239,8 @@ export default function Pantry({
         className="mt-2 flex items-center justify-between rounded-md border border-white/10 px-3 py-1.5 text-[12px] text-sage/90 transition-colors hover:border-gold/60 hover:text-gold pantry-filter-toggle"
       >
         <span>
-          Search, tags &amp; sort
-          {query.trim() || activeTags.length > 0
-            ? ` · ${[query.trim() ? "search" : "", activeTags.length ? `${activeTags.length} tag${activeTags.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(", ")}`
-            : ""}
+          Filters &amp; sort
+          {` · ${[ownerFilter === "all" ? "All" : ownerFilter === "mine" ? "Mine" : "Public", query.trim() ? "search" : "", activeTags.length ? `${activeTags.length} tag${activeTags.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(", ")}`}
         </span>
         <span aria-hidden>{filtersOpen ? "▴" : "▾"}</span>
       </button>
@@ -256,7 +256,6 @@ export default function Pantry({
         className="mt-2 w-full rounded-md border border-white/10 bg-board-panel px-3 py-1.5 sm:mt-4 sm:py-2 text-[13px] text-chalk placeholder:text-sage/50 outline-none focus:border-gold/60"
       />
 
-      {managing ? (
         <div className="mt-2 flex gap-1.5">
           {(["all", "mine", "public"] as const).map((f) => (
             <button
@@ -273,7 +272,7 @@ export default function Pantry({
             </button>
           ))}
         </div>
-      ) : (
+      {!managing && (
       <div className="mt-2 flex items-center justify-between gap-2">
         <button
           type="button"
@@ -441,7 +440,14 @@ export default function Pantry({
         ) : managing ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {filtered.map((meal) => (
-              <MealCard key={meal.id} meal={meal} variant="browse" weekIso={weekIso} manage />
+              <MealCard
+                key={meal.id}
+                meal={meal}
+                variant="browse"
+                weekIso={weekIso}
+                visibleNutrients={visibleNutrients}
+                manage
+              />
             ))}
           </div>
         ) : (
