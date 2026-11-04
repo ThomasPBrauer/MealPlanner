@@ -17,6 +17,7 @@ interface MealCardProps {
   // Dragging (pantry/placed) is handled by the DraggableMealCard wrapper,
   // not by MealCard itself — this component is purely presentational.
   variant?: "pantry" | "placed" | "browse";
+  manage?: boolean; // the board is in Manage mode — carried through so "back" from the meal page returns to it
   weekIso?: string; // the board's current week — carried through so "back" from the meal page returns here
   visibleNutrients?: NutritionKey[]; // which nutrition fields to show, per the user's preferences
   onRemove?: () => void;
@@ -26,6 +27,7 @@ export default function MealCard({
   meal,
   variant = "pantry",
   weekIso,
+  manage = false,
   visibleNutrients = [],
   onRemove,
 }: MealCardProps) {
@@ -39,7 +41,9 @@ export default function MealCard({
   const viewHref = isVirtual
     ? meal.source
     : weekIso
-    ? `${mealPath(meal)}?from=board&week=${weekIso}`
+    ? `${mealPath(meal)}?from=board&week=${weekIso}${manage ? "&manage=1" : ""}`
+    : manage
+    ? `${mealPath(meal)}?from=board&manage=1`
     : mealPath(meal);
 
   // only show fields the user opted into AND that this meal actually has a value for

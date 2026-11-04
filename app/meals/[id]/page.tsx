@@ -116,8 +116,15 @@ export default async function MealDetailPage({ params, searchParams }: PageProps
   // if that's where you double-clicked from, otherwise the meals list
   const fromBoard = first(searchParams.from) === "board" && signedIn;
   const weekParam = first(searchParams.week);
-  const backHref = fromBoard ? (weekParam ? `/?week=${weekParam}` : "/") : "/meals";
-  const backLabel = fromBoard ? "← Back to the board" : "← Back to meals";
+  const manageParam = first(searchParams.manage) === "1";
+  const backHref = fromBoard
+    ? weekParam
+      ? `/?week=${weekParam}${manageParam ? "&manage=1" : ""}`
+      : manageParam
+      ? "/?manage=1"
+      : "/"
+    : "/meals";
+  const backLabel = fromBoard ? (manageParam ? "← Back to your recipes" : "← Back to the board") : "← Back to meals";
   const editHref =
     fromBoard && weekParam
       ? `${mealPath(meal)}/edit?from=board&week=${weekParam}`

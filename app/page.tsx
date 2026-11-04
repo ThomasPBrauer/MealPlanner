@@ -66,6 +66,8 @@ function BoardContent() {
   const { data: session } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // "Manage" mode: the calendar collapses and the pantry fills the board
+  const [managing, setManaging] = useState(() => searchParams.get("manage") === "1");
   const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [mealsLoading, setMealsLoading] = useState(true);
@@ -388,8 +390,10 @@ function BoardContent() {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveDrag(null)}
       >
-        <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-3 lg:h-[calc(100vh-6rem)] lg:grid-cols-[1fr_360px] lg:gap-4">
-          {weekStart ? (
+        <div className={`mx-auto grid max-w-[1400px] grid-cols-1 gap-3 lg:h-[calc(100vh-6rem)] lg:gap-4 ${
+            managing ? "" : "lg:grid-cols-[1fr_360px]"
+          }`}>
+          {managing ? null : weekStart ? (
             <WeekCalendar
               plan={plan}
               notes={weekIso ? weekNotes[weekIso] ?? {} : {}}
@@ -413,6 +417,8 @@ function BoardContent() {
             loading={mealsLoading}
             weekIso={weekIso ?? undefined}
             visibleNutrients={preferences.visibleNutrients}
+            managing={managing}
+            onToggleManage={() => setManaging((m) => !m)}
           />
         </div>
 

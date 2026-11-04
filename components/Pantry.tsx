@@ -13,6 +13,7 @@ import {
 import { colorForTag } from "@/lib/data";
 import { buildVirtualOffMeal, OFF_OWNER_EMAIL, offProductUrl, OffSearchResult } from "@/lib/openfoodfacts";
 import DraggableMealCard from "./DraggableMealCard";
+import MealCard from "./MealCard";
 import { DragPayload } from "./DaySlot";
 
 interface PantryProps {
@@ -20,6 +21,9 @@ interface PantryProps {
   loading?: boolean;
   weekIso?: string;
   visibleNutrients?: NutritionKey[];
+  /** Manage mode: the calendar is collapsed and the recipes fill the page */
+  managing?: boolean;
+  onToggleManage?: () => void;
 }
 
 /** Compares two meals on a single sort key. `dir` is +1 for ascending, -1
@@ -68,8 +72,11 @@ export default function Pantry({
   loading,
   weekIso,
   visibleNutrients,
+  managing = false,
+  onToggleManage,
 }: PantryProps) {
   const [query, setQuery] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState<"all" | "mine" | "public">("all");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [tagMode, setTagMode] = useState<TagMode>("or");
   const [sortKey, setSortKey] = useState<PantrySortKey>("name");
@@ -136,10 +143,16 @@ export default function Pantry({
           : tagMode === "and"
           ? activeTags.every((t) => m.tags.includes(t))
           : activeTags.some((t) => m.tags.includes(t));
-      return matchesQuery && matchesTags;
+      const matchesOwner =
+        !managing || ownerFilter === "all"
+          ? true
+          : ownerFilter === "mine"
+          ? !!m.isMine
+          : m.visibility === "public" && !m.isMine;
+      return matchesQuery && matchesTags && matchesOwner;
     });
     return result.sort((a, b) => compareMeals(a, b, sortKey, sortDir));
-  }, [meals, query, activeTags, tagMode, sortKey, sortDir]);
+  }, [meals, query, activeTags, tagMode, sortKey, sortDir, managing, ownerFilter]);
 
   async function handleOffSearch() {
     const q = query.trim();
@@ -201,12 +214,19 @@ export default function Pantry({
           >
             + New meal
           </Link>
-          <Link
-            href={weekIso ? `/meals?week=${weekIso}` : "/meals"}
-            className="rounded border border-white/10 px-2.5 py-1 text-[11px] text-sage/90 transition-colors hover:border-gold/60 hover:text-gold"
+          <button
+            type="button"
+            onClick={onToggleManage}
+            aria-pressed={managing}
+            title={managing ? "Show the calendar again" : "Hide the calendar and browse all recipes"}
+            className={`rounded border px-2.5 py-1 text-[11px] transition-colors ${
+              managing
+                ? "border-gold text-gold"
+                : "border-white/10 text-sage/90 hover:border-gold/60 hover:text-gold"
+            }`}
           >
-            Manage
-          </Link>
+            {managing ? "Done" : "Manage"}
+          </button>
         </div>
       </div>
 
@@ -233,9 +253,27 @@ export default function Pantry({
           setOffError(null);
         }}
         placeholder="Search recipes…"
-        className="mt-2 rounded-md border border-white/10 bg-board-panel px-3 py-1.5 sm:mt-4 sm:py-2 text-[13px] text-chalk placeholder:text-sage/50 outline-none focus:border-gold/60"
+        className="mt-2 w-full rounded-md border border-white/10 bg-board-panel px-3 py-1.5 sm:mt-4 sm:py-2 text-[13px] text-chalk placeholder:text-sage/50 outline-none focus:border-gold/60"
       />
 
+      {managing ? (
+        <div className="mt-2 flex gap-1.5">
+          {(["all", "mine", "public"] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setOwnerFilter(f)}
+              className={`rounded-full border px-3 py-1 text-[11px] transition-colors ${
+                ownerFilter === f
+                  ? "border-gold text-gold"
+                  : "border-white/10 text-sage/80 hover:border-white/25"
+              }`}
+            >
+              {f === "all" ? "All" : f === "mine" ? "Mine" : "Public"}
+            </button>
+          ))}
+        </div>
+      ) : (
       <div className="mt-2 flex items-center justify-between gap-2">
         <button
           type="button"
@@ -247,6 +285,7 @@ export default function Pantry({
         </button>
         {offError && <p className="text-[10.5px] text-tomato">{offError}</p>}
       </div>
+      )}
 
       {tags.length > 0 && (
         <div className="mt-2 flex max-h-[4.5rem] flex-wrap items-center gap-1.5 overflow-y-auto pr-1 sm:mt-3 sm:max-h-28">
@@ -349,8 +388,14 @@ export default function Pantry({
       </div>
       </div>
 
-      <div className="mt-3 max-h-[70vh] min-h-[240px] flex-1 space-y-3 overflow-auto pr-1 pt-2 lg:max-h-none lg:min-h-0">
-        {visibleOffResults.length > 0 && (
+      <div
+        className={`mt-3 flex-1 overflow-auto pr-1 pt-2 ${
+          managing
+            ? "min-h-[240px] lg:min-h-0"
+            : "max-h-[70vh] min-h-[240px] space-y-3 lg:max-h-none lg:min-h-0"
+        }`}
+      >
+        {!managing && visibleOffResults.length > 0 && (
           <div className="space-y-2 rounded-md border border-gold/25 bg-gold/5 p-2">
             <p className="text-[10.5px] uppercase tracking-[0.15em] text-gold/80">
               From Open Food Facts — drag onto the board to add
@@ -371,7 +416,7 @@ export default function Pantry({
             })}
           </div>
         )}
-        {offSearchedFor && !offLoading && visibleOffResults.length === 0 && !offError && (
+        {!managing && offSearchedFor && !offLoading && visibleOffResults.length === 0 && !offError && (
           <p className="text-center text-[11px] text-sage/60">
             No Open Food Facts results for “{offSearchedFor}”.
           </p>
@@ -393,6 +438,12 @@ export default function Pantry({
               "No recipes match. Try another search, tag, or match setting."
             )}
           </p>
+        ) : managing ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {filtered.map((meal) => (
+              <MealCard key={meal.id} meal={meal} variant="browse" weekIso={weekIso} manage />
+            ))}
+          </div>
         ) : (
           filtered.map((meal) => (
             <DraggableMealCard
@@ -409,8 +460,9 @@ export default function Pantry({
       </div>
 
       <p className="mt-3 pt-2 text-center text-[10.5px] leading-snug text-sage/50">
-        Drag a card onto the board to plan it. Drag a planned card back here
-        to remove it.
+        {managing
+          ? "Select a recipe to view, edit or delete it. Press Done to get the calendar back."
+          : "Drag a card onto the board to plan it. Drag a planned card back here to remove it."}
       </p>
     </section>
   );
