@@ -118,3 +118,18 @@ body,
   .pantry-filter-toggle { display: none; }
   .pantry-filters { display: block !important; }
 }
+
+/* the board slides in from the side you navigated toward */
+@keyframes week-slide-next {
+  from { transform: translateX(48px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes week-slide-prev {
+  from { transform: translateX(-48px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.week-slide-next { animation: week-slide-next 280ms ease-out; }
+.week-slide-prev { animation: week-slide-prev 280ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .week-slide-next, .week-slide-prev { animation: none; }
+}

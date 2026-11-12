@@ -231,15 +231,22 @@ function BoardContent() {
 
     // optimistic local update so the drag feels instant
     setWeekEntries((prev) => {
-      let next = prev[weekIso] ?? [];
-      if (resolvedPayload.source === "board") {
-        next = next.filter((e) => e.id !== resolvedPayload.meal.instanceId);
+      // a card moved from another week (dragged across via the week arrows)
+      // lives in that week's cached list, so take it out of every cached week
+      const cleaned: typeof prev = {};
+      for (const [wk, entries] of Object.entries(prev)) {
+        cleaned[wk] =
+          resolvedPayload.source === "board"
+            ? entries.filter((e) => e.id !== resolvedPayload.meal.instanceId)
+            : entries;
       }
-      next = [
-        ...next,
-        { id: tempId, date: target.date, mealType: target.mealType, mealId: resolvedPayload.meal.id },
-      ];
-      return { ...prev, [weekIso]: next };
+      return {
+        ...cleaned,
+        [weekIso]: [
+          ...(cleaned[weekIso] ?? []),
+          { id: tempId, date: target.date, mealType: target.mealType, mealId: resolvedPayload.meal.id },
+        ],
+      };
     });
 
     try {
@@ -323,6 +330,7 @@ function BoardContent() {
       return;
     }
 
+    if (over.id === "nav-prev" || over.id === "nav-next") return; // hover-only targets
     const overData = over.data.current as { date: string; mealType: MealType } | undefined;
     if (!overData) return;
     if (payload.source === "board" && payload.fromSlot === over.id) return; // dropped back on itself

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+import { useDndContext, useDroppable } from "@dnd-kit/core";
 import {
   MEAL_TYPES,
   MealType,
@@ -52,6 +54,60 @@ function sumDayNutrition(
     }
   }
   return totals;
+}
+
+// How long a dragged card has to hover over an arrow before the week flips,
+// and how often it keeps flipping while the card stays there.
+const HOVER_FLIP_DELAY_MS = 550;
+const HOVER_FLIP_REPEAT_MS = 1000;
+
+/** The previous/next-week arrow. Clicking it changes week; so does holding a
+ * dragged meal over it, which is how a meal gets moved to another week:
+ * hover the arrow until the board slides, then drop on a slot. */
+function WeekArrow({
+  id,
+  direction,
+  onNavigate,
+}: {
+  id: "nav-prev" | "nav-next";
+  direction: "prev" | "next";
+  onNavigate: (direction: "prev" | "next") => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  const { active } = useDndContext();
+  const latest = useRef(onNavigate);
+  latest.current = onNavigate;
+
+  useEffect(() => {
+    if (!isOver) return;
+    let repeat: ReturnType<typeof setInterval> | undefined;
+    const first = setTimeout(() => {
+      latest.current(direction);
+      repeat = setInterval(() => latest.current(direction), HOVER_FLIP_REPEAT_MS);
+    }, HOVER_FLIP_DELAY_MS);
+    return () => {
+      clearTimeout(first);
+      if (repeat) clearInterval(repeat);
+    };
+  }, [isOver, direction]);
+
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      onClick={() => onNavigate(direction)}
+      aria-label={direction === "prev" ? "Previous week" : "Next week"}
+      className={`rounded-md border px-3 py-1 text-lg leading-none transition-colors ${
+        isOver
+          ? "chalk-drop-target border-gold text-gold"
+          : active
+          ? "border-gold/50 text-gold"
+          : "border-transparent text-sage/90 hover:bg-white/5 hover:text-gold"
+      }`}
+    >
+      {direction === "prev" ? "‹" : "›"}
+    </button>
+  );
 }
 
 function DayTotals({
@@ -107,6 +163,17 @@ export default function WeekCalendar({
     0
   );
 
+  // which way the week just moved, so the new week slides in from that side.
+  // Kept in a ref that only changes when the week does, so the class stays put
+  // (and the animation isn't cut short) across the re-renders that follow.
+  const slideRef = useRef({ week: weekStartISO, dir: "" });
+  if (slideRef.current.week !== weekStartISO) {
+    slideRef.current = {
+      week: weekStartISO,
+      dir: weekStartISO > slideRef.current.week ? "week-slide-next" : "week-slide-prev",
+    };
+  }
+
   return (
     <section className="chalk-texture flex flex-col rounded-xl bg-board p-3 sm:p-5 lg:h-full lg:min-h-0">
       <header className="mb-2 flex flex-wrap items-end justify-between gap-x-3 gap-y-1 sm:mb-3">
@@ -146,32 +213,20 @@ export default function WeekCalendar({
 
       {/* week navigation */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-md border border-white/10 bg-board-panel/60 px-2 py-1 sm:mb-4 sm:px-3 sm:py-2">
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => onNavigate("prev")}
-            aria-label="Previous week"
-            className="rounded px-2 py-1 text-sage/90 transition-colors hover:bg-white/5 hover:text-gold"
-          >
-            ‹
-          </button>
-          <button
-            onClick={() => onNavigate("today")}
-            className="rounded border border-white/10 px-2 py-1 text-[11px] text-sage/90 transition-colors hover:border-gold/60 hover:text-gold"
-          >
-            Today
-          </button>
-          <button
-            onClick={() => onNavigate("next")}
-            aria-label="Next week"
-            className="rounded px-2 py-1 text-sage/90 transition-colors hover:bg-white/5 hover:text-gold"
-          >
-            ›
-          </button>
-        </div>
+        <button
+          onClick={() => onNavigate("today")}
+          className="rounded border border-white/10 px-2 py-1 text-[11px] text-sage/90 transition-colors hover:border-gold/60 hover:text-gold"
+        >
+          Today
+        </button>
 
-        <p className="font-display text-lg leading-none text-chalk sm:text-xl">
-          {formatWeekRange(weekStart)}
-        </p>
+        <div className="flex items-center gap-1 sm:gap-2">
+          <WeekArrow id="nav-prev" direction="prev" onNavigate={onNavigate} />
+          <p className="min-w-[8.5rem] text-center font-display text-lg leading-none text-chalk sm:min-w-[11rem] sm:text-xl">
+            {formatWeekRange(weekStart)}
+          </p>
+          <WeekArrow id="nav-next" direction="next" onNavigate={onNavigate} />
+        </div>
 
         <label className="flex items-center gap-1.5 text-[11px] text-sage/90">
           <span>Jump to</span>
@@ -188,7 +243,8 @@ export default function WeekCalendar({
       </div>
 
       <div
-        className={`transition-opacity ${loading ? "pointer-events-none opacity-50" : ""} flex flex-1 min-h-0`}
+        key={weekStartISO}
+        className={`transition-opacity ${loading ? "pointer-events-none opacity-50" : ""} flex min-h-0 flex-1 overflow-x-hidden ${slideRef.current.dir}`}
       >
         {orientation === "daysTop" ? (
           <div className="grid flex-1 grid-cols-[22px_repeat(7,minmax(0,1fr))] gap-1 overflow-auto sm:grid-cols-[44px_repeat(7,minmax(0,1fr))] sm:gap-1.5 sm:pr-1">
