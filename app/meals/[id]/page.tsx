@@ -8,6 +8,7 @@ import { Meal } from "@/lib/types";
 import { colorForTags } from "@/lib/data";
 import { parseISODateLocal } from "@/lib/date";
 import { resolveIngredients, resolveInstructionGroups } from "@/lib/recipe";
+import WakeLockToggle from "@/components/WakeLockToggle";
 import DeleteMealButton from "@/components/DeleteMealButton";
 import { mealPath } from "@/lib/slug";
 import { getSiteUrl } from "@/lib/site";
@@ -196,9 +197,12 @@ export default async function MealDetailPage({ params, searchParams }: PageProps
                 <h1 className="font-display text-4xl leading-none text-chalk">{meal.name}</h1>
               </div>
             </div>
-            <span className="shrink-0 rounded-full border border-white/10 px-2.5 py-1 text-[10.5px] text-sage/80">
-              {meal.visibility === "public" ? "Public" : "Personal"}
-            </span>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10.5px] text-sage/80">
+                {meal.visibility === "public" ? "Public" : "Personal"}
+              </span>
+              <WakeLockToggle />
+            </div>
           </div>
           <p className="mt-3 text-[12px] text-sage/70">
             {meal.primaryProtein !== "None" && `Protein: ${meal.primaryProtein}`}
