@@ -229,7 +229,7 @@ function extractInstructionSteps(raw: any): string[] {
   if (typeof raw === "string") {
     return clean(raw)
       .split(/\n+/)
-      .map((s) => s.trim())
+      .map((s) => stripListMarker(s.trim()))
       .filter(Boolean);
   }
   if (!Array.isArray(raw)) return [];
@@ -249,7 +249,7 @@ function extractInstructionSteps(raw: any): string[] {
       }
     }
   }
-  return steps.filter(Boolean);
+  return steps.map(stripListMarker).filter(Boolean);
 }
 
 export interface ExtractResult {
@@ -407,8 +407,14 @@ function findSectionLineIndex(lines: string[], pattern: RegExp, from = 0): numbe
  * pasted numbered or bulleted step isn't numbered a second time by the
  * recipe page. A bare leading number ("30 minutes…") is left alone. */
 function stripListMarker(line: string): string {
-  return line.replace(/^(?:[*\-•–·▪●]|\d+[.)])\s+/, "").trim();
+  return line.replace(LIST_MARKER_RE, "").trim();
 }
+
+// "Step 1", "Step 1:", "STEP 2 -", "1.", "1)", "(1)", "1:" and bullets. A
+// number only counts as a marker when punctuation follows it and what follows
+// that isn't another digit, so "1.5 cups" and "30 minutes" survive.
+const LIST_MARKER_RE =
+  /^(?:step\s*\d+\s*[:.)\-–—]?\s*|\(?\d+[.):]\s*(?!\d)|\(\d+\)\s*|[*\-•–·▪●]\s+)/i;
 
 /** "Prep Time:", "Servings:", etc. — the label and its value are usually on
  * separate lines in a plain-text copy of the page, but handle same-line
@@ -538,7 +544,7 @@ function mergeWrappedIngredients(lines: string[]): string[] {
   return out;
 }
 
-const STEP_MARKER_RE = /^(?:\d+[.)]|step\s*\d+[:.)]?)\s+/i;
+const STEP_MARKER_RE = /^(?:\(?\d+[.):]|step\s*\d+[:.)\-–—]?)\s+/i;
 
 /** Joins lines that are really one step wrapped across lines. Text copied
  * from a PDF, a Word file or an OCR'd photo breaks lines at the page width,
@@ -546,14 +552,27 @@ const STEP_MARKER_RE = /^(?:\d+[.)]|step\s*\d+[:.)]?)\s+/i;
  * the steps are numbered, any line without a number continues the one before
  * it; otherwise a line that starts in lowercase after one that didn't end a
  * sentence is treated as a continuation. */
+// a number sitting alone on its line ("2", "Step 2") — sites paste these
+// between steps; they aren't steps, but they do mark where the next begins
+const BARE_STEP_NUMBER_RE = /^(step\s*)?\d+\.?$/i;
+
 function mergeWrappedSteps(lines: string[]): string[] {
-  const numbered = lines.filter((l) => STEP_MARKER_RE.test(l)).length >= 2;
+  const numbered =
+    lines.filter((l) => STEP_MARKER_RE.test(l) || BARE_STEP_NUMBER_RE.test(l)).length >= 2;
   const out: string[] = [];
+  let startNew = false;
   for (const line of lines) {
+    if (BARE_STEP_NUMBER_RE.test(line)) {
+      startNew = true;
+      continue;
+    }
     const prev = out[out.length - 1];
-    const continues = numbered
+    const continues = startNew
+      ? false
+      : numbered
       ? !STEP_MARKER_RE.test(line) && prev !== undefined
       : prev !== undefined && /^[a-z]/.test(line) && !/[.!?:;)"”]$/.test(prev);
+    startNew = false;
     if (continues) out[out.length - 1] = `${prev} ${line}`;
     else out.push(line);
   }
@@ -622,8 +641,6 @@ export function parseRecipeText(raw: string): ExtractResult {
           ? []
           : lines
               .slice(directionsStart + 1, sectionEnd(directionsStart))
-              // drop bare step-number lines some sites paste on their own line ("1", "Step 1")
-              .filter((l) => !/^(step\s*)?\d+\.?$/i.test(l))
       )
         // and the "1." / "•" marker at the front of a step
         .map(stripListMarker)

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import NumberedTextarea from "./NumberedTextarea";
 import {
   CARB_OPTIONS,
   Ingredient,
@@ -935,14 +936,16 @@ export default function MealForm({
         <legend className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-sage">
           {components.length > 0 ? "Additional instructions" : "Instructions"}
         </legend>
-        <textarea
+        <NumberedTextarea
           value={instructionsText}
-          onChange={(e) => setInstructionsText(e.target.value)}
+          onChange={setInstructionsText}
           placeholder={"One step per line:\nPreheat oven to 400°F.\nToss vegetables with oil and spices.\n..."}
-          rows={7}
-          className={`${inputClass} resize-y leading-relaxed`}
+          className="bg-board-panel"
         />
-        <p className="mt-1.5 text-[10.5px] text-sage/60">One step per line.</p>
+        <p className="mt-1.5 text-[10.5px] text-sage/60">
+          One step per line — a long step may wrap onto more rows, but it&apos;s still one step. The
+          numbers are only a guide; they aren&apos;t saved.
+        </p>
       </fieldset>
 
       <button
