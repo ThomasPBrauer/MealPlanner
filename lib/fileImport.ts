@@ -249,6 +249,27 @@ const OCR_TARGET_LONG_SIDE = 2400;
 
 async function extractImage(file: File, onProgress: Progress): Promise<FileImportResult> {
   onProgress("Preparing the image…");
+  const canvas = await imageToCanvas(file);
+  return { text: await runOcr([canvas], onProgress), method: "ocr" };
+}
+
+/** Several photos, in order — the pages of a recipe shot with the camera.
+ * They're read as one document, so a step that runs from one page onto the
+ * next is stitched back together just like a multi-page PDF. */
+export async function extractTextFromImages(
+  files: readonly File[],
+  onProgress: Progress = () => {}
+): Promise<FileImportResult> {
+  if (files.length === 0) throw new FileImportError("Take at least one photo first.");
+  const canvases: HTMLCanvasElement[] = [];
+  for (let i = 0; i < files.length; i++) {
+    onProgress(files.length > 1 ? `Preparing photo ${i + 1} of ${files.length}…` : "Preparing the photo…");
+    canvases.push(await imageToCanvas(files[i]));
+  }
+  return { text: await runOcr(canvases, onProgress), method: "ocr" };
+}
+
+async function imageToCanvas(file: File): Promise<HTMLCanvasElement> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -269,7 +290,7 @@ async function extractImage(file: File, onProgress: Progress): Promise<FileImpor
     ctx.fillStyle = "#ffffff"; // transparent PNGs would otherwise read as black
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return { text: await runOcr([canvas], onProgress), method: "ocr" };
+    return canvas;
   } finally {
     URL.revokeObjectURL(url);
   }

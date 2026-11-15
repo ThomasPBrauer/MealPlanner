@@ -12,7 +12,8 @@ import {
   PROTEIN_OPTIONS,
 } from "@/lib/types";
 import { DEPARTMENT_SUGGESTIONS, TAG_SUGGESTIONS, colorForTag } from "@/lib/data";
-import { FileImportError, extractTextFromFile } from "@/lib/fileImport";
+import { FileImportError, extractTextFromFile, extractTextFromImages } from "@/lib/fileImport";
+import CameraImport from "./CameraImport";
 
 export interface MealFormValues {
   name: string;
@@ -122,7 +123,7 @@ export default function MealForm({
   const [availableMeals, setAvailableMeals] = useState<Meal[]>([]);
   const [componentToAdd, setComponentToAdd] = useState("");
 
-  const [importMode, setImportMode] = useState<"url" | "text" | "file">("url");
+  const [importMode, setImportMode] = useState<"url" | "text" | "file" | "camera">("url");
   const [importProgress, setImportProgress] = useState<string | null>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -332,6 +333,27 @@ export default function MealForm({
     if (note) setImportError(note);
   }
 
+  // photos taken with the camera (one per page): read together as one recipe
+  async function handleCameraPages(files: File[]) {
+    setImporting(true);
+    setImportError(null);
+    setImportedName(null);
+    let text: string;
+    try {
+      text = (await extractTextFromImages(files, setImportProgress)).text;
+    } catch (err) {
+      setImportError(
+        err instanceof FileImportError ? err.message : "Couldn't read those photos. Try again with better light, or paste the text instead."
+      );
+      setImporting(false);
+      setImportProgress(null);
+      return;
+    }
+    setImportProgress("Pulling out the recipe…");
+    await runImport({ text }, files.length === 1 ? "Camera photo" : `Camera photos (${files.length} pages)`);
+    setImportProgress(null);
+  }
+
   function handleFileDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDraggingFile(false);
@@ -395,7 +417,7 @@ export default function MealForm({
         <div className="mb-2 flex items-center justify-between">
           <p className="text-[12px] font-semibold text-gold">Import a recipe</p>
           <div className="flex items-center gap-1 rounded-full border border-gold/30 p-0.5 text-[10.5px]">
-            {(["url", "text", "file"] as const).map((mode) => (
+            {(["url", "text", "file", "camera"] as const).map((mode) => (
               <button
                 key={mode}
                 type="button"
@@ -407,7 +429,7 @@ export default function MealForm({
                   importMode === mode ? "bg-gold text-ink" : "text-sage/80 hover:text-chalk"
                 }`}
               >
-                {mode === "url" ? "From URL" : mode === "text" ? "Paste text" : "From file"}
+                {mode === "url" ? "From URL" : mode === "text" ? "Paste text" : mode === "file" ? "From file" : "Camera"}
               </button>
             ))}
           </div>
@@ -430,6 +452,11 @@ export default function MealForm({
             >
               {importing ? "Importing…" : "Import"}
             </button>
+          </div>
+        ) : importMode === "camera" ? (
+          <div>
+            <CameraImport disabled={importing} onRead={handleCameraPages} />
+            {importing && importProgress && <p className="mt-2 text-[11.5px] text-sage/80">{importProgress}</p>}
           </div>
         ) : importMode === "file" ? (
           <div>
@@ -485,6 +512,8 @@ export default function MealForm({
         <p className="mt-2 text-[10.5px] text-sage/60">
           {importMode === "url"
             ? "Works on pages that publish standard recipe markup (most WordPress food blogs and major recipe sites do). If a site blocks automated fetches, switch to \"Paste text\" and copy the page yourself instead."
+            : importMode === "camera"
+            ? "Photograph each page of the recipe in order — a book spread, a recipe card, a magazine. Pages are read together on your device (nothing is uploaded), so a step that runs onto the next page is joined up. Flat, well-lit, and square-on gives the best reading."
             : importMode === "file"
             ? "The file is read on your device and never uploaded. Photos and scanned PDFs are read with text recognition, so check numbers and fractions carefully."
             : "Open the recipe in your browser, select all the text on the page (or just the recipe portion), copy, and paste it here."}{" "}
