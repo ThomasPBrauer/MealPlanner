@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import PhotoCropper from "./PhotoCropper";
 
 /** Most pages one recipe can be shot as — OCR is slow, and this is plenty. */
 export const MAX_CAMERA_PAGES = 12;
@@ -25,6 +26,7 @@ export default function CameraImport({
   const [shots, setShots] = useState<Shot[]>([]);
   const [live, setLive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cropping, setCropping] = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const nextId = useRef(1);
@@ -111,6 +113,18 @@ export default function CameraImport({
     });
   }
 
+  // swap in the cropped / rotated photo for the original
+  function replaceShot(id: number, file: File) {
+    setShots((prev) =>
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        URL.revokeObjectURL(s.url);
+        return { ...s, file, url: URL.createObjectURL(file) };
+      })
+    );
+    setCropping(null);
+  }
+
   function move(id: number, by: -1 | 1) {
     setShots((prev) => {
       const i = prev.findIndex((s) => s.id === id);
@@ -195,13 +209,15 @@ export default function CameraImport({
       {shots.length > 0 && (
         <div>
           <p className="mb-1.5 text-[11px] text-sage/70">
-            {shots.length} {shots.length === 1 ? "page" : "pages"} — in reading order. Retake any that look blurry.
+            {shots.length} {shots.length === 1 ? "page" : "pages"} — in reading order. Tap a page to crop or rotate it.
           </p>
           <ol className="flex gap-2 overflow-x-auto pb-1">
             {shots.map((s, i) => (
               <li key={s.id} className="relative shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s.url} alt={`Page ${i + 1}`} className="h-24 w-[4.5rem] rounded border border-white/15 object-cover" />
+                <button type="button" onClick={() => setCropping(s.id)} aria-label={`Crop page ${i + 1}`} className="block">
+                  <img src={s.url} alt={`Page ${i + 1}`} className="h-24 w-[4.5rem] rounded border border-white/15 object-cover" />
+                </button>
                 <span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[10px] text-chalk">{i + 1}</span>
                 <button
                   type="button"
@@ -214,6 +230,9 @@ export default function CameraImport({
                 <div className="mt-1 flex justify-between text-[11px] text-sage/70">
                   <button type="button" onClick={() => move(s.id, -1)} disabled={i === 0} aria-label="Move earlier" className="px-1 disabled:opacity-30">
                     ‹
+                  </button>
+                  <button type="button" onClick={() => setCropping(s.id)} className="px-1 text-gold/90 hover:text-gold">
+                    Crop
                   </button>
                   <button type="button" onClick={() => move(s.id, 1)} disabled={i === shots.length - 1} aria-label="Move later" className="px-1 disabled:opacity-30">
                     ›
@@ -234,6 +253,14 @@ export default function CameraImport({
       )}
 
       {error && <p className="text-[11.5px] text-tomato">{error}</p>}
+
+      {cropping !== null && shots.some((s) => s.id === cropping) && (
+        <PhotoCropper
+          file={shots.find((s) => s.id === cropping)!.file}
+          onApply={(f) => replaceShot(cropping, f)}
+          onCancel={() => setCropping(null)}
+        />
+      )}
     </div>
   );
 }
