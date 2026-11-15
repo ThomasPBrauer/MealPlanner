@@ -30,7 +30,7 @@ export default async function RecipeBookPage({
     const m = serializeMeal(row);
     return {
       id: m.id,
-      slug: m.slug,
+      slug: m.slug ?? null,
       name: m.name,
       tags: m.tags,
       minutes: m.minutes,

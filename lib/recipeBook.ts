@@ -3,7 +3,7 @@
 
 export interface BookRecipe {
   id: string;
-  slug: string | null;
+  slug?: string | null;
   name: string;
   tags: string[];
   minutes: number;
