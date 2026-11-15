@@ -14,6 +14,9 @@ function isPublicRecipeRead(pathname: string, method: string): boolean {
   // browse list + its API
   if (pathname === "/meals" || pathname === "/api/meals") return true;
 
+  // the public recipe book
+  if (pathname === "/recipebook") return true;
+
   // /meals/<slug> — but not /meals/new (and /meals/<slug>/edit has an
   // extra segment, so it never matches)
   const page = pathname.match(/^\/meals\/([^/]+)$/);

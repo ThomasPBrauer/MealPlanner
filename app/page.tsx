@@ -378,6 +378,12 @@ function BoardContent() {
         </p>
         <div className="flex items-center gap-3">
           <Link
+            href="/recipebook"
+            className="text-[11px] text-sage/90 transition-colors hover:text-gold"
+          >
+            Recipe book
+          </Link>
+          <Link
             href="/settings"
             className="text-[11px] text-sage/90 transition-colors hover:text-gold"
           >
