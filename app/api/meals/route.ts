@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getActiveBoard } from "@/lib/boards";
 import {
   createMealWithSlug,
+  listBoardOnlyMeals,
   listVisibleMeals,
   parseMealInput,
   sanitizeComponentIds,
@@ -15,7 +17,15 @@ export async function GET() {
   // get public recipes only (this route is open to GET without a session)
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? undefined;
-  return NextResponse.json({ meals: await listVisibleMeals(email) });
+  const meals = await listVisibleMeals(email);
+  if (email) {
+    const board = await getActiveBoard(email);
+    if (!board.isOwn) {
+      meals.push(...(await listBoardOnlyMeals(board.boardEmail, email)));
+      meals.sort((a, b) => a.name.localeCompare(b.name));
+    }
+  }
+  return NextResponse.json({ meals });
 }
 
 export async function POST(req: Request) {

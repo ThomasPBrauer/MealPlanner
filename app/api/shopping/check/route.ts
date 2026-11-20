@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getActiveBoard } from "@/lib/boards";
 import { prisma } from "@/lib/prisma";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -10,6 +11,7 @@ export async function GET(req: Request) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
+  const { boardEmail } = await getActiveBoard(session.user.email);
 
   const { searchParams } = new URL(req.url);
   const week = searchParams.get("week");
@@ -18,7 +20,7 @@ export async function GET(req: Request) {
   }
 
   const rows = await prisma.shoppingCheck.findMany({
-    where: { email: session.user.email, weekStart: week },
+    where: { email: boardEmail, weekStart: week },
     select: { itemKey: true },
   });
 
@@ -30,7 +32,8 @@ export async function PUT(req: Request) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
-  const email = session.user.email;
+  const { boardEmail } = await getActiveBoard(session.user.email);
+  const email = boardEmail;
 
   const body = await req.json().catch(() => ({}));
   const week = typeof body.week === "string" ? body.week : "";

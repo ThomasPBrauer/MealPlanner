@@ -109,7 +109,7 @@ function LoginForm() {
 
         <p className="mt-4 text-center text-[12px] text-ink/60">
           No account?{" "}
-          <Link href="/register" className="font-semibold text-tomato">
+          <Link href={`/register?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="font-semibold text-tomato">
             Create one
           </Link>
         </p>

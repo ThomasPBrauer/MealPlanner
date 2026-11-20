@@ -31,6 +31,7 @@ import {
   slotKey,
 } from "@/lib/types";
 import { colorForTags } from "@/lib/data";
+import BoardSwitcher from "@/components/BoardSwitcher";
 import { applyTheme } from "@/lib/theme";
 import { isPatternKey } from "@/lib/patterns";
 import { addDays, parseISODateLocal, startOfWeek, toISODate } from "@/lib/date";
@@ -377,6 +378,7 @@ function BoardContent() {
           <span className="text-chalk">{session?.user?.email ?? session?.user?.name}</span>
         </p>
         <div className="flex items-center gap-3">
+          <BoardSwitcher onSwitched={() => window.location.reload()} />
           <Link
             href="/recipebook"
             className="text-[11px] text-sage/90 transition-colors hover:text-gold"

@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getMealHistory, getVisibleMeal, listVisibleMeals } from "@/lib/meals";
+import { ANONYMOUS_CONTRIBUTOR, getContributorName, getMealHistory, getVisibleMeal, listVisibleMeals } from "@/lib/meals";
+import { getActiveBoard } from "@/lib/boards";
 import { Meal } from "@/lib/types";
 import { colorForTags } from "@/lib/data";
 import { parseISODateLocal } from "@/lib/date";
@@ -90,8 +91,9 @@ export default async function MealDetailPage({ params, searchParams }: PageProps
   const email = session?.user?.email ?? undefined;
   const signedIn = !!email;
 
+  const board = email ? await getActiveBoard(email) : null;
   const [meal, allMeals] = await Promise.all([
-    getVisibleMeal(params.id, email),
+    getVisibleMeal(params.id, email, board?.boardEmail),
     listVisibleMeals(email, { withLastPlanned: false }),
   ]);
   if (!meal) notFound();
@@ -112,6 +114,8 @@ export default async function MealDetailPage({ params, searchParams }: PageProps
   const history = signedIn ? await getMealHistory(meal.id, meal.isMine, email) : null;
 
   const accent = colorForTags(meal.tags);
+  // public recipes credit their contributor (display name, never an email)
+  const contributor = meal.visibility === "public" ? await getContributorName(meal.id) : null;
 
   // where "back" should go: the board (on the same week you were viewing)
   // if that's where you double-clicked from, otherwise the meals list
@@ -202,6 +206,7 @@ export default async function MealDetailPage({ params, searchParams }: PageProps
                   {meal.tags.join(", ")} · {meal.minutes} min · {meal.servings} serving{meal.servings === 1 ? "" : "s"}
                 </p>
                 <h1 className="font-display text-4xl leading-none text-chalk">{meal.name}</h1>
+                {contributor && <p className="mt-1.5 text-[12px] text-sage/70">Shared by {contributor}</p>}
               </div>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1.5">

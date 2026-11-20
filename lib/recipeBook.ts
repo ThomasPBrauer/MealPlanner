@@ -13,6 +13,8 @@ export interface BookRecipe {
   /** ingredient names only — what the search looks through */
   ingredientNames: string[];
   hasPhoto: boolean;
+  /** display name of whoever shared it */
+  contributor?: string;
 }
 
 export interface Chapter {
@@ -70,7 +72,7 @@ export function searchRecipes(recipes: BookRecipe[], query: string): BookRecipe[
   if (words.length === 0) return [];
   return recipes
     .filter((r) => {
-      const haystack = [r.name, ...r.tags, r.primaryProtein, r.primaryCarb, ...r.ingredientNames]
+      const haystack = [r.name, ...r.tags, r.primaryProtein, r.primaryCarb, r.contributor ?? "", ...r.ingredientNames]
         .join(" \n ")
         .toLowerCase();
       return words.every((w) => haystack.includes(w));

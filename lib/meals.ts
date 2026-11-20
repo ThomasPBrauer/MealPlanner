@@ -225,15 +225,54 @@ export function visibleMealsWhere(email?: string): Prisma.MealWhereInput {
 /** One meal, or null if it doesn't exist or isn't visible to this viewer
  * (a personal meal is only ever visible to its owner). Shared by the recipe
  * pages and the API so both enforce identical visibility. */
-export async function getVisibleMeal(idOrSlug: string, email?: string) {
+export async function getVisibleMeal(idOrSlug: string, email?: string, boardEmail?: string) {
   // recipe URLs use the slug; the id is still accepted so links made before
   // slugs existed keep working
   const row =
     (await prisma.meal.findUnique({ where: { slug: idOrSlug } })) ??
     (await prisma.meal.findUnique({ where: { id: idOrSlug } }));
   if (!row) return null;
-  if (row.visibility !== "public" && row.ownerEmail !== email) return null;
+  if (row.visibility !== "public" && row.ownerEmail !== email) {
+    // on someone else's board you can open a personal recipe that's planned on it
+    const onBoard =
+      !!boardEmail &&
+      boardEmail !== email &&
+      (await prisma.plannedMeal.count({ where: { email: boardEmail, mealId: row.id } })) > 0;
+    if (!onBoard) return null;
+  }
   return serializeMeal(row, email);
+}
+
+export const ANONYMOUS_CONTRIBUTOR = "A home cook";
+
+/** Who to credit for a public recipe: the owner's display name, or a generic
+ * label when they haven't set one. Never their email. */
+export async function getContributorName(mealId: string): Promise<string> {
+  const row = await prisma.meal.findUnique({ where: { id: mealId }, select: { ownerEmail: true } });
+  if (!row) return ANONYMOUS_CONTRIBUTOR;
+  const owner = await prisma.user.findUnique({ where: { email: row.ownerEmail }, select: { displayName: true } });
+  return owner?.displayName || ANONYMOUS_CONTRIBUTOR;
+}
+
+/** Personal recipes that other members of a shared board have planned on it.
+ * Without these the board would show gaps where a family member's own recipe
+ * is planned — they're visible only because they're on the board. */
+export async function listBoardOnlyMeals(boardEmail: string, viewerEmail: string) {
+  const planned = await prisma.plannedMeal.findMany({
+    where: { email: boardEmail },
+    select: { mealId: true },
+    distinct: ["mealId"],
+  });
+  if (planned.length === 0) return [];
+  const rows = await prisma.meal.findMany({
+    where: {
+      id: { in: planned.map((p) => p.mealId) },
+      visibility: { not: "public" },
+      NOT: { ownerEmail: viewerEmail },
+    },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((r) => ({ ...serializeMeal(r, viewerEmail), lastPlannedDate: null as string | null }));
 }
 
 /** Every meal this viewer may see, A–Z. `lastPlannedDate` is only filled in

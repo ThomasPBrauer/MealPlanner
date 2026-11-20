@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getActiveBoard } from "@/lib/boards";
 import { prisma } from "@/lib/prisma";
 import { MEAL_TYPES } from "@/lib/types";
 
@@ -12,6 +13,7 @@ export async function GET(req: Request) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
+  const { boardEmail } = await getActiveBoard(session.user.email);
 
   const { searchParams } = new URL(req.url);
   const start = searchParams.get("start");
@@ -21,7 +23,7 @@ export async function GET(req: Request) {
   }
 
   const rows = await prisma.slotNote.findMany({
-    where: { email: session.user.email, date: { gte: start, lte: end } },
+    where: { email: boardEmail, date: { gte: start, lte: end } },
   });
 
   return NextResponse.json({
@@ -34,6 +36,7 @@ export async function PUT(req: Request) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
+  const { boardEmail } = await getActiveBoard(session.user.email);
 
   const body = await req.json().catch(() => ({}));
   const { date, mealType } = body;
@@ -49,15 +52,15 @@ export async function PUT(req: Request) {
   if (!note) {
     // an empty note means "clear it" — delete rather than store a blank row
     await prisma.slotNote.deleteMany({
-      where: { email: session.user.email, date, mealType },
+      where: { email: boardEmail, date, mealType },
     });
     return NextResponse.json({ date, mealType, note: "" });
   }
 
   const saved = await prisma.slotNote.upsert({
-    where: { email_date_mealType: { email: session.user.email, date, mealType } },
+    where: { email_date_mealType: { email: boardEmail, date, mealType } },
     update: { note },
-    create: { email: session.user.email, date, mealType, note },
+    create: { email: boardEmail, date, mealType, note },
   });
 
   return NextResponse.json({ date: saved.date, mealType: saved.mealType, note: saved.note });

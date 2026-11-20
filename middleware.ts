@@ -17,6 +17,9 @@ function isPublicRecipeRead(pathname: string, method: string): boolean {
   // the public recipe book
   if (pathname === "/recipebook") return true;
 
+  // where an invite link lands — it offers sign-in / sign-up first, then joins
+  if (pathname.startsWith("/join/")) return true;
+
   // /meals/<slug> — but not /meals/new (and /meals/<slug>/edit has an
   // extra segment, so it never matches)
   const page = pathname.match(/^\/meals\/([^/]+)$/);

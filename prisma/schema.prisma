@@ -13,6 +13,36 @@ model User {
   email        String   @unique
   passwordHash String
   createdAt    DateTime @default(now())
+  // the name shown on recipes shared to the public recipe book. Unique
+  // (compared by displayNameKey — case/accent/spacing-insensitive); null = not set.
+  displayName    String?
+  displayNameKey String?  @unique
+}
+
+// Someone who has joined another person's board. A board is identified by its
+// owner's email — the plan, notes and shopping checks are stored under it — so
+// a member simply reads and writes the owner's rows.
+model BoardMember {
+  id          String   @id @default(cuid())
+  boardEmail  String
+  memberEmail String
+  createdAt   DateTime @default(now())
+
+  @@unique([boardEmail, memberEmail])
+  @@index([memberEmail])
+}
+
+// A link the owner sends to let someone join their board. Anyone signed in
+// who opens it before it expires (or is revoked) joins.
+model BoardInvite {
+  id         String    @id @default(cuid())
+  boardEmail String
+  token      String    @unique
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  @@index([boardEmail])
 }
 
 model UserPreference {

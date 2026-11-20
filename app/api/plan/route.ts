@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getActiveBoard } from "@/lib/boards";
 import { prisma } from "@/lib/prisma";
 import { MEAL_TYPES } from "@/lib/types";
 
@@ -12,6 +13,7 @@ export async function GET(req: Request) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
+  const { boardEmail } = await getActiveBoard(session.user.email);
 
   const { searchParams } = new URL(req.url);
   const start = searchParams.get("start");
@@ -24,7 +26,7 @@ export async function GET(req: Request) {
   }
 
   const rows = await prisma.plannedMeal.findMany({
-    where: { email: session.user.email, date: { gte: start, lte: end } },
+    where: { email: boardEmail, date: { gte: start, lte: end } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -43,6 +45,7 @@ export async function POST(req: Request) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
+  const { boardEmail } = await getActiveBoard(session.user.email);
 
   const body = await req.json().catch(() => ({}));
   const { date, mealType, mealId } = body;
@@ -65,7 +68,7 @@ export async function POST(req: Request) {
   }
 
   const entry = await prisma.plannedMeal.create({
-    data: { email: session.user.email, date, mealType, mealId },
+    data: { email: boardEmail, date, mealType, mealId },
   });
 
   return NextResponse.json(
@@ -79,6 +82,7 @@ export async function DELETE(req: Request) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
+  const { boardEmail } = await getActiveBoard(session.user.email);
 
   const { searchParams } = new URL(req.url);
   const start = searchParams.get("start");
@@ -91,7 +95,7 @@ export async function DELETE(req: Request) {
   }
 
   await prisma.plannedMeal.deleteMany({
-    where: { email: session.user.email, date: { gte: start, lte: end } },
+    where: { email: boardEmail, date: { gte: start, lte: end } },
   });
 
   return NextResponse.json({ ok: true });

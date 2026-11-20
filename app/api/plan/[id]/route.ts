@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getActiveBoard } from "@/lib/boards";
 import { prisma } from "@/lib/prisma";
 import { MEAL_TYPES } from "@/lib/types";
 
@@ -15,11 +16,12 @@ export async function PATCH(
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
+  const { boardEmail } = await getActiveBoard(session.user.email);
 
   const existing = await prisma.plannedMeal.findUnique({
     where: { id: params.id },
   });
-  if (!existing || existing.email !== session.user.email) {
+  if (!existing || existing.email !== boardEmail) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
@@ -50,11 +52,12 @@ export async function DELETE(
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
+  const { boardEmail } = await getActiveBoard(session.user.email);
 
   const existing = await prisma.plannedMeal.findUnique({
     where: { id: params.id },
   });
-  if (!existing || existing.email !== session.user.email) {
+  if (!existing || existing.email !== boardEmail) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 

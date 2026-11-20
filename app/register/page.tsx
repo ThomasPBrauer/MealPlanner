@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  // where to go afterwards (an invite link, say) — only same-site paths
+  const rawCallback = useSearchParams().get("callbackUrl") || "/";
+  const callbackUrl = rawCallback.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,10 +43,10 @@ export default function RegisterPage() {
 
     setLoading(false);
     if (signInRes?.error) {
-      router.push("/login");
+      router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
       return;
     }
-    router.push("/");
+    router.push(callbackUrl);
     router.refresh();
   }
 
@@ -95,11 +98,19 @@ export default function RegisterPage() {
 
         <p className="mt-4 text-center text-[12px] text-ink/60">
           Already have an account?{" "}
-          <Link href="/login" className="font-semibold text-tomato">
+          <Link href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="font-semibold text-tomato">
             Sign in
           </Link>
         </p>
       </div>
     </main>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
   );
 }

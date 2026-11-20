@@ -281,6 +281,7 @@ function RecipeRow({ recipe, href, showTags = false }: { recipe: BookRecipe; hre
           </span>
           <span className="block truncate text-[11.5px] text-sage/70">
             {details.join(" · ")}
+            {recipe.contributor ? ` · by ${recipe.contributor}` : ""}
             {showTags && recipe.tags.length > 0 ? ` — ${recipe.tags.join(", ")}` : ""}
           </span>
         </span>

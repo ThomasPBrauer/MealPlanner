@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getActiveBoard } from "@/lib/boards";
 import { prisma } from "@/lib/prisma";
 
 async function requireOwnedItem(email: string, id: string) {
@@ -14,7 +15,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
-  const existing = await requireOwnedItem(session.user.email, params.id);
+  const { boardEmail } = await getActiveBoard(session.user.email);
+  const existing = await requireOwnedItem(boardEmail, params.id);
   if (!existing) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
@@ -50,7 +52,8 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
-  const existing = await requireOwnedItem(session.user.email, params.id);
+  const { boardEmail } = await getActiveBoard(session.user.email);
+  const existing = await requireOwnedItem(boardEmail, params.id);
   if (!existing) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }

@@ -20,6 +20,7 @@ import { PATTERN_OPTIONS, PatternKey, isPatternKey, patternCss } from "@/lib/pat
 import { groupFonts } from "@/lib/fonts";
 import { DEFAULT_THEME_NAME, ThemeSummary } from "@/lib/themes";
 import ThemeSettings from "@/components/ThemeSettings";
+import SharingSettings from "@/components/SharingSettings";
 
 const COLOR_FIELDS: { key: keyof ThemeColors; label: string; hint: string }[] = [
   { key: "board", label: "Background", hint: "Main page background" },
@@ -386,6 +387,7 @@ export default function SettingsPage() {
               </div>
             </form>
           )}
+          {!loading && <SharingSettings />}
         </div>
       </div>
     </main>
