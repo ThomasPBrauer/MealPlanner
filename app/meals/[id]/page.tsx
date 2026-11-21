@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { ANONYMOUS_CONTRIBUTOR, getContributorName, getMealHistory, getVisibleMeal, listVisibleMeals } from "@/lib/meals";
+import { ANONYMOUS_CONTRIBUTOR, getContributorName, getMealHistory, getVisibleMeal, listBoardOnlyMeals, listVisibleMeals } from "@/lib/meals";
 import { getActiveBoard } from "@/lib/boards";
 import { Meal } from "@/lib/types";
 import { colorForTags } from "@/lib/data";
@@ -92,11 +92,17 @@ export default async function MealDetailPage({ params, searchParams }: PageProps
   const signedIn = !!email;
 
   const board = email ? await getActiveBoard(email) : null;
-  const [meal, allMeals] = await Promise.all([
+  const [meal, ownAndPublicMeals] = await Promise.all([
     getVisibleMeal(params.id, email, board?.boardEmail),
     listVisibleMeals(email, { withLastPlanned: false }),
   ]);
   if (!meal) notFound();
+
+  // on someone else's board, "Built from" must also resolve their personal recipes
+  const allMeals =
+    email && board && !board.isOwn
+      ? [...ownAndPublicMeals, ...(await listBoardOnlyMeals(board.boardEmail, email))]
+      : ownAndPublicMeals;
 
   // one address per recipe: a link made with the old id (or any other
   // spelling) is sent permanently to the slug URL, keeping its query string
@@ -111,7 +117,8 @@ export default async function MealDetailPage({ params, searchParams }: PageProps
   }
 
   // planning history is per-user, so there's nothing to show signed out
-  const history = signedIn ? await getMealHistory(meal.id, meal.isMine, email) : null;
+  const history = signedIn ? await getMealHistory(meal.id, meal.isMine, email, board?.boardEmail) : null;
+  const onSharedBoard = !!history && !history.isOwner && !!history.onSharedBoard;
 
   const accent = colorForTags(meal.tags);
   // public recipes credit their contributor (display name, never an email)
@@ -366,10 +373,12 @@ export default async function MealDetailPage({ params, searchParams }: PageProps
                 </div>
               )
             ) : history.own.length === 0 ? (
-              <p className="text-[12px] text-sage/70">You haven&apos;t planned this meal yet.</p>
+              <p className="text-[12px] text-sage/70">
+                {onSharedBoard ? "This board hasn't planned this meal yet." : "You haven't planned this meal yet."}
+              </p>
             ) : (
               <p className="text-[12px] text-sage/80">
-                You&apos;ve planned this {history.own.length} time{history.own.length === 1 ? "" : "s"}:{" "}
+                {onSharedBoard ? "This board has planned this" : "You've planned this"} {history.own.length} time{history.own.length === 1 ? "" : "s"}:{" "}
                 <span className="text-sage/60">{history.own.slice(0, 8).map(formatDate).join(", ")}</span>
                 {history.own.length > 8 && ` +${history.own.length - 8} more`}
               </p>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getActiveBoard } from "@/lib/boards";
+import { boardPrivateMealIds } from "@/lib/meals";
 import { prisma } from "@/lib/prisma";
 import { MEAL_TYPES } from "@/lib/types";
 
@@ -61,8 +62,13 @@ export async function POST(req: Request) {
   // personal meal owned by someone else must never be plannable, even if
   // its id were guessed or replayed
   const meal = await prisma.meal.findUnique({ where: { id: mealId } });
+  // …except that on a shared board, a member's personal recipe that's already
+  // in use there (planned, or built into something planned) can be planned again
   const visible =
-    meal && (meal.visibility === "public" || meal.ownerEmail === session.user.email);
+    !!meal &&
+    (meal.visibility === "public" ||
+      meal.ownerEmail === session.user.email ||
+      (boardEmail !== session.user.email && (await boardPrivateMealIds(boardEmail)).has(meal.id)));
   if (!visible) {
     return NextResponse.json({ error: "Unknown meal." }, { status: 400 });
   }

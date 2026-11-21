@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getVisibleMeal } from "@/lib/meals";
+import { getActiveBoard } from "@/lib/boards";
 
 // Serves a recipe's uploaded photo as a real image. Photos are stored as
 // base64 data URLs, which can't be used as an image address by search
@@ -15,7 +16,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? undefined;
   // same visibility rule as the page: a personal recipe's photo is the owner's alone
-  const meal = await getVisibleMeal(params.id, email);
+  const board = email ? await getActiveBoard(email) : null;
+  const meal = await getVisibleMeal(params.id, email, board?.boardEmail);
   if (!meal?.photo) return new Response("Not found", { status: 404 });
 
   const match = meal.photo.match(/^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/i);

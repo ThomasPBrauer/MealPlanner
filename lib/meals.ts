@@ -233,11 +233,10 @@ export async function getVisibleMeal(idOrSlug: string, email?: string, boardEmai
     (await prisma.meal.findUnique({ where: { id: idOrSlug } }));
   if (!row) return null;
   if (row.visibility !== "public" && row.ownerEmail !== email) {
-    // on someone else's board you can open a personal recipe that's planned on it
+    // on someone else's board you can open a personal recipe of a member's
+    // that's planned there, or that a planned recipe is built from
     const onBoard =
-      !!boardEmail &&
-      boardEmail !== email &&
-      (await prisma.plannedMeal.count({ where: { email: boardEmail, mealId: row.id } })) > 0;
+      !!boardEmail && boardEmail !== email && (await boardPrivateMealIds(boardEmail)).has(row.id);
     if (!onBoard) return null;
   }
   return serializeMeal(row, email);
@@ -254,34 +253,78 @@ export async function getContributorName(mealId: string): Promise<string> {
   return owner?.displayName || ANONYMOUS_CONTRIBUTOR;
 }
 
-/** Personal recipes that other members of a shared board have planned on it.
- * Without these the board would show gaps where a family member's own recipe
- * is planned — they're visible only because they're on the board. */
+/** Personal recipes that belong to members of a shared board and are in use on
+ * it: planned there, or a component (at any depth) of something planned there.
+ * Only the board's own members' recipes count — a stranger's public recipe
+ * can't drag one of the stranger's private recipes into view. */
+export async function boardPrivateMealIds(boardEmail: string): Promise<Set<string>> {
+  const [members, planned] = await Promise.all([
+    prisma.boardMember.findMany({ where: { boardEmail }, select: { memberEmail: true } }),
+    prisma.plannedMeal.findMany({ where: { email: boardEmail }, select: { mealId: true }, distinct: ["mealId"] }),
+  ]);
+  const people = new Set([boardEmail, ...members.map((m) => m.memberEmail)]);
+
+  const seen = new Set(planned.map((p) => p.mealId));
+  const result = new Set<string>();
+  let frontier = Array.from(seen);
+  while (frontier.length > 0) {
+    const rows = await prisma.meal.findMany({
+      where: { id: { in: frontier } },
+      select: { id: true, ownerEmail: true, visibility: true, components: true },
+    });
+    const next: string[] = [];
+    for (const r of rows) {
+      if (r.visibility !== "public" && people.has(r.ownerEmail)) result.add(r.id);
+      let kids: unknown;
+      try {
+        kids = JSON.parse(r.components);
+      } catch {
+        kids = [];
+      }
+      if (Array.isArray(kids)) {
+        for (const k of kids) {
+          if (typeof k === "string" && !seen.has(k)) {
+            seen.add(k);
+            next.push(k);
+          }
+        }
+      }
+    }
+    frontier = next;
+  }
+  return result;
+}
+
+/** The personal recipes of a shared board's members that are in use on it, for
+ * the other members to see — without them the board would show gaps where a
+ * family member's own recipe is planned, or "a deleted recipe" under "Built
+ * from". Visible only because they're on the board. */
 export async function listBoardOnlyMeals(boardEmail: string, viewerEmail: string) {
-  const planned = await prisma.plannedMeal.findMany({
-    where: { email: boardEmail },
-    select: { mealId: true },
-    distinct: ["mealId"],
-  });
-  if (planned.length === 0) return [];
-  const rows = await prisma.meal.findMany({
-    where: {
-      id: { in: planned.map((p) => p.mealId) },
-      visibility: { not: "public" },
-      NOT: { ownerEmail: viewerEmail },
-    },
-    orderBy: { name: "asc" },
-  });
-  return rows.map((r) => ({ ...serializeMeal(r, viewerEmail), lastPlannedDate: null as string | null }));
+  const ids = Array.from(await boardPrivateMealIds(boardEmail));
+  if (ids.length === 0) return [];
+  const [rows, lastPlanned] = await Promise.all([
+    prisma.meal.findMany({
+      where: { id: { in: ids }, NOT: { ownerEmail: viewerEmail } },
+      orderBy: { name: "asc" },
+    }),
+    getLastPlannedDates(boardEmail),
+  ]);
+  return rows.map((r) => ({
+    ...serializeMeal(r, viewerEmail),
+    lastPlannedDate: lastPlanned.get(r.id) ?? null,
+  }));
 }
 
 /** Every meal this viewer may see, A–Z. `lastPlannedDate` is only filled in
  * for a signed-in viewer (and only when asked for — it costs an extra query). */
-export async function listVisibleMeals(email?: string, opts: { withLastPlanned?: boolean } = {}) {
-  const { withLastPlanned = true } = opts;
+export async function listVisibleMeals(
+  email?: string,
+  opts: { withLastPlanned?: boolean; /** whose plan "last planned" comes from — a shared board's, say */ plannedEmail?: string } = {}
+) {
+  const { withLastPlanned = true, plannedEmail } = opts;
   const [rows, lastPlanned] = await Promise.all([
     prisma.meal.findMany({ where: visibleMealsWhere(email), orderBy: { name: "asc" } }),
-    email && withLastPlanned ? getLastPlannedDates(email) : Promise.resolve(new Map<string, string>()),
+    email && withLastPlanned ? getLastPlannedDates(plannedEmail ?? email) : Promise.resolve(new Map<string, string>()),
   ]);
   return rows.map((r) => ({
     ...serializeMeal(r, email),
@@ -291,16 +334,27 @@ export async function listVisibleMeals(email?: string, opts: { withLastPlanned?:
 
 export type MealHistory =
   | { isOwner: true; history: { email: string; dates: string[] }[] }
-  | { isOwner: false; own: string[] };
+  | { isOwner: false; own: string[]; /** these are the shared board's dates, not just yours */ onSharedBoard?: boolean };
 
 /** Planning history for a meal. The owner sees every user who's planned it;
  * anyone else sees only their own usage; an anonymous viewer has none. */
 export async function getMealHistory(
   mealId: string,
   isOwner: boolean,
-  email?: string
+  email?: string,
+  boardEmail?: string
 ): Promise<MealHistory> {
   if (!email) return { isOwner: false, own: [] };
+
+  // looking at someone else's board: show that board's history (the board
+  // owner's plan, which everyone on it shares), whoever wrote the recipe
+  if (boardEmail && boardEmail !== email) {
+    const rows = await prisma.plannedMeal.findMany({
+      where: { mealId, email: boardEmail },
+      orderBy: { date: "desc" },
+    });
+    return { isOwner: false, own: rows.map((r) => r.date), onSharedBoard: true };
+  }
 
   if (isOwner) {
     const rows = await prisma.plannedMeal.findMany({

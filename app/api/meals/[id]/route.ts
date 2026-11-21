@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getActiveBoard } from "@/lib/boards";
 import { prisma } from "@/lib/prisma";
 import {
   containsCycle,
@@ -20,7 +21,8 @@ export async function GET(
   // personal meal to its owner — everyone else gets public meals only
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? undefined;
-  const meal = await getVisibleMeal(params.id, email);
+  const board = email ? await getActiveBoard(email) : null;
+  const meal = await getVisibleMeal(params.id, email, board?.boardEmail);
   if (!meal) return NextResponse.json({ error: "Not found." }, { status: 404 });
   return NextResponse.json(meal);
 }

@@ -17,13 +17,12 @@ export async function GET() {
   // get public recipes only (this route is open to GET without a session)
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? undefined;
-  const meals = await listVisibleMeals(email);
-  if (email) {
-    const board = await getActiveBoard(email);
-    if (!board.isOwn) {
-      meals.push(...(await listBoardOnlyMeals(board.boardEmail, email)));
-      meals.sort((a, b) => a.name.localeCompare(b.name));
-    }
+  const board = email ? await getActiveBoard(email) : null;
+  // on a shared board "last planned" is the board's, not just yours
+  const meals = await listVisibleMeals(email, { plannedEmail: board?.boardEmail });
+  if (email && board && !board.isOwn) {
+    meals.push(...(await listBoardOnlyMeals(board.boardEmail, email)));
+    meals.sort((a, b) => a.name.localeCompare(b.name));
   }
   return NextResponse.json({ meals });
 }
